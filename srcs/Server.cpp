@@ -133,7 +133,7 @@ void Server::handleClientRequest(int clientIndex) {
 
     // Générer et envoyer la réponse
     request.parseHttpRequest(buffer);
-    std::string response = request.handleRequest(request);
+    std::string response = request.handleRequest();
     send(client_fd, response.c_str(), response.size(), 0);
 }
 

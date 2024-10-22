@@ -35,23 +35,23 @@ HttpRequest HttpRequest::parseHttpRequest(const std::string rawRequest)
 	return (request);
 }
 
-std::string HttpRequest::handleRequest(const HttpRequest& request)
+std::string HttpRequest::handleRequest()
 {
-	if (request._method.compare("GET") == 0)
-		return handleGet(request);
-	else if (request._method.compare("POST") == 0)
-		return handlePost(request);
-	else if (request._method.compare("DELETE") == 0)
-		return handleDelete(request);
+	if (this->_method.compare("GET") == 0)
+		return handleGet();
+	else if (this->_method.compare("POST") == 0)
+		return handlePost();
+	else if (this->_method.compare("DELETE") == 0)
+		return handleDelete();
 	else
 		return ("HTTP/1.1 404 Not Found\r\n\r\n");
 	
 }
 
-std::string HttpRequest::handleGet(const HttpRequest& request)
+std::string HttpRequest::handleGet()
 {
     std::string response;
-    std::ifstream file(("." + request._path).c_str());
+    std::ifstream file(("." + this->_path).c_str());
 
     if (file.is_open())
     {
@@ -81,13 +81,13 @@ std::string HttpRequest::handleGet(const HttpRequest& request)
 }
 
 
-std::string HttpRequest::handlePost(const HttpRequest& request)
+std::string HttpRequest::handlePost()
 {
     std::string response;
 
     // Traiter les données envoyées via le body
     std::ofstream outfile("./uploaded_data.txt");
-    outfile << request._body;
+    outfile << this->_body;
     outfile.close();
 
     response = "HTTP/1.1 200 OK\r\n";
@@ -98,12 +98,12 @@ std::string HttpRequest::handlePost(const HttpRequest& request)
 }
 
 
-std::string HttpRequest::handleDelete(const HttpRequest& request)
+std::string HttpRequest::handleDelete()
 {
     std::string response;
     
     // Supprimer le fichier
-    if (std::remove(("." + request._path).c_str()) == 0)
+    if (std::remove(("." + this->_path).c_str()) == 0)
 	{
         response = "HTTP/1.1 200 OK\r\n";
         response += "Content-Type: text/plain\r\n";
