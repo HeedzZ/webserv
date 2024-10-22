@@ -16,13 +16,9 @@
 int main(void)
 {
     // Crée une instance du serveur sur le port 8080
-<<<<<<< HEAD
     ServerConfig config("server.conf");
     config.parseConfigFile();
     Server server(config.getPort());
-=======
-    Server server(8080);
->>>>>>> refs/remotes/origin/main
 
     // Initialise le socket, le lie à l'adresse et le met en écoute
     server.initSocket();
