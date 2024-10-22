@@ -132,20 +132,45 @@ void Server::handleClientRequest(int clientIndex) {
 
     std::cout << "Requête reçue : \n" << buffer << std::endl;
 
-    // Gérer la requête HTTP et générer la réponse
+    // Gérer la requête HTTP et analyser le chemin demandé
     request.parseHttpRequest(buffer);
+    std::string requestedPath = request.getPath();
 
-    // Ici, on peut générer une réponse d'erreur si la ressource n'est pas trouvée
-    int statusCode = 404;  // Exemple avec un code d'erreur 404
-    std::string body = "<html><body><h1>404 Not Found</h1></body></html>";
+    // Si aucun chemin n'est spécifié, servir "html/index.html"
+    if (requestedPath == "/") {
+        requestedPath = "/index.html";
+    }
 
-    // Construction de la réponse HTTP avec conversion du code d'état en chaîne
-    std::string response = "HTTP/1.1 " + intToString(statusCode) + " Not Found\r\n"
-                           "Content-Type: text/html\r\n"
-                           "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
-                           body;
+    // Ajouter "html/" devant chaque chemin demandé
+    std::string fullPath = "html" + requestedPath;
 
-    send(client_fd, response.c_str(), response.size(), 0);
+    // Tenter d'ouvrir le fichier demandé
+    std::ifstream file(fullPath.c_str());
+    if (file) {
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        std::string body = buffer.str();
+
+        // Construire la réponse HTTP
+        std::string response = "HTTP/1.1 200 OK\r\n"
+                               "Content-Type: text/html\r\n"
+                               "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
+                               body;
+
+        send(client_fd, response.c_str(), response.size(), 0);
+    } else {
+        // Si le fichier n'existe pas, renvoyer une erreur 404
+        std::string body = "<html><body><h1>404 Not Found</h1></body></html>";
+        std::string response = "HTTP/1.1 404 Not Found\r\n"
+                               "Content-Type: text/html\r\n"
+                               "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
+                               body;
+
+        send(client_fd, response.c_str(), response.size(), 0);
+    }
 }
+
+
+
 
 

@@ -1,11 +1,5 @@
 #include "HttpRequest.hpp"
 
-/*
-GET /index.html HTTP/1.1  //Request Line GET == méthode HTTP // /index.html == Path // HTTP/1.1 == Version
-Host: localhost 		  //HTTP Headers Host
-User-Agent: curl/7.68.0	  //HTTP Headers client 
-Accept: */				  //HTTP Headers ce que le client accept 
-/**/
 HttpRequest::HttpRequest()
 {
 }
@@ -121,7 +115,9 @@ std::string HttpRequest::handleDelete()
     return response;
 }
 
-
+std::string HttpRequest::getPath() const {
+    return _path;
+}
 
 HttpRequest::~HttpRequest()
 {

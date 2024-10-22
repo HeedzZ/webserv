@@ -29,6 +29,7 @@ public:
 	std::string handleGet();
 	std::string handlePost();
 	std::string handleDelete();
+	std::string getPath() const;
 };
 
 #endif
