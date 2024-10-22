@@ -13,6 +13,12 @@
 #include "Server.hpp"
 #include "HttpRequest.hpp"
 
+std::string intToString(int value) {
+    std::ostringstream oss;
+    oss << value;
+    return oss.str();
+}
+
 // Constructeur
 Server::Server(int port) : _server_fd(0), _addrlen(sizeof(_address)), _port(port) {}
 
@@ -81,8 +87,8 @@ void Server::handleNewConnection() {
         std::cerr << "Erreur : accept() échoué" << std::endl;
         return;
     }
-    addClient(new_socket);
     std::cout << "Nouvelle connexion acceptée" << std::endl;
+    addClient(new_socket);
 }
 
 // Ajoute un client au vecteur de poll
@@ -104,36 +110,42 @@ void Server::handleClientRequest(int clientIndex) {
     HttpRequest request;
     int client_fd = _poll_fds[clientIndex].fd;
     std::string buffer;
-    char tempBuffer[1024];  // Tampon temporaire pour lire les données
+    char tempBuffer[1024];
     ssize_t bytes_read;
 
-    // Lire jusqu'à ce que le client ferme la connexion ou qu'une ligne vide soit reçue
+    // Lire les données du client
     while (true) {
         bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
         if (bytes_read <= 0) {
-            // Si bytes_read est 0, cela signifie que le client a fermé la connexion
             removeClient(clientIndex);
             return;
         }
 
-        // Ajouter un terminator null à tempBuffer pour faire de la lecture une chaîne C
         tempBuffer[bytes_read] = '\0';
-        
-        // Ajouter les données lues au buffer
         buffer += std::string(tempBuffer, bytes_read);
 
-        // Vérifier si la requête est terminée (ex: une ligne vide ou une condition personnalisée)
+        // Vérifier la fin de la requête HTTP
         if (buffer.find("\r\n\r\n") != std::string::npos) {
-            break; // La requête HTTP est terminée
+            break;
         }
     }
 
-    // Afficher la requête reçue
     std::cout << "Requête reçue : \n" << buffer << std::endl;
 
-    // Générer et envoyer la réponse
+    // Gérer la requête HTTP et générer la réponse
     request.parseHttpRequest(buffer);
-    std::string response = request.handleRequest();
+
+    // Ici, on peut générer une réponse d'erreur si la ressource n'est pas trouvée
+    int statusCode = 404;  // Exemple avec un code d'erreur 404
+    std::string body = "<html><body><h1>404 Not Found</h1></body></html>";
+
+    // Construction de la réponse HTTP avec conversion du code d'état en chaîne
+    std::string response = "HTTP/1.1 " + intToString(statusCode) + " Not Found\r\n"
+                           "Content-Type: text/html\r\n"
+                           "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
+                           body;
+
     send(client_fd, response.c_str(), response.size(), 0);
 }
+
 

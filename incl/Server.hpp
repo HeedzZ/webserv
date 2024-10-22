@@ -21,6 +21,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <poll.h>
+#include <sstream>
 
 class Server {
 public:
