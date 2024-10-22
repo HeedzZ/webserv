@@ -11,10 +11,14 @@
 /* ************************************************************************** */
 
 #include "Server.hpp"
+#include "ServerConfig.hpp"
 
-int main() {
+int main(void)
+{
     // Crée une instance du serveur sur le port 8080
-    Server server(8081);
+    ServerConfig config("server.conf");
+    config.parseConfigFile();
+    Server server(config.getPort());
 
     // Initialise le socket, le lie à l'adresse et le met en écoute
     server.initSocket();
