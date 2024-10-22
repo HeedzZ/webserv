@@ -14,7 +14,7 @@
 
 int main() {
     // Crée une instance du serveur sur le port 8080
-    Server server(8081);
+    Server server(8080);
 
     // Initialise le socket, le lie à l'adresse et le met en écoute
     server.initSocket();
