@@ -22,7 +22,7 @@ private:
 public:
 	HttpRequest();
 	~HttpRequest();
-	HttpRequest ParseHttpRequest(const std::string rawRequest);
+	HttpRequest parseHttpRequest(const std::string rawRequest);
 	std::string handleRequest(const HttpRequest& request);
 	std::string handleGet(const HttpRequest& request);
 	std::string handlePost(const HttpRequest& request);

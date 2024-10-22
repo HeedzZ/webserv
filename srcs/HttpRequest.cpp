@@ -8,10 +8,9 @@ Accept: */				  //HTTP Headers ce que le client accept
 /**/
 HttpRequest::HttpRequest()
 {
-	std::cout << "Default constructor called" << std::endl;
 }
 
-HttpRequest HttpRequest::ParseHttpRequest(const std::string rawRequest)
+HttpRequest HttpRequest::parseHttpRequest(const std::string rawRequest)
 {
 	HttpRequest request;
 	std::string	line;
@@ -20,9 +19,6 @@ HttpRequest HttpRequest::ParseHttpRequest(const std::string rawRequest)
 	std::getline(requestStream, line);
 	std::istringstream lineStream(line);
 	lineStream >> _method >> _path >> _httpVersion;
-	std::cout << "_method = "<< _method << std::endl;
-	std::cout << "_path = "<< _path << std::endl;
-	std::cout << "_httpVersion = "<< _httpVersion << std::endl;
 
 	while (std::getline(requestStream, line) && line != "\r")
 	{
@@ -32,7 +28,6 @@ HttpRequest HttpRequest::ParseHttpRequest(const std::string rawRequest)
             std::string headerName = line.substr(0, delimiter);
             std::string headerValue = line.substr(delimiter + 2);  // Skip ": "
             _headers[headerName] = headerValue;
-			std::cout << headerName << " = " <<  _headers[headerName] << std::endl;
         }
 	}
 	if (request._method == "POST")
@@ -124,5 +119,4 @@ std::string HttpRequest::handleDelete(const HttpRequest& request)
 
 HttpRequest::~HttpRequest()
 {
-	std::cout << "Destructor called" << std::endl;
 }

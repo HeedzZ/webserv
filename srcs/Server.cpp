@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 #include "Server.hpp"
+#include "HttpRequest.hpp"
 
 // Constructeur
 Server::Server(int port) : _server_fd(0), _addrlen(sizeof(_address)), _port(port) {}
@@ -100,6 +101,7 @@ void Server::removeClient(int index) {
 }
 
 void Server::handleClientRequest(int clientIndex) {
+    HttpRequest request;
     int client_fd = _poll_fds[clientIndex].fd;
     std::string buffer;
     char tempBuffer[1024];  // Tampon temporaire pour lire les données
@@ -130,26 +132,8 @@ void Server::handleClientRequest(int clientIndex) {
     std::cout << "Requête reçue : \n" << buffer << std::endl;
 
     // Générer et envoyer la réponse
-    std::string response = createHttpResponse();
+    request.parseHttpRequest(buffer);
+    std::string response = request.handleRequest(request);
     send(client_fd, response.c_str(), response.size(), 0);
 }
 
-// Génère une réponse HTTP simple
-std::string createHttpResponse(int statusCode, const std::string& contentType, const std::string& body) {
-    std::string response;
-    response += "HTTP/1.1 " + std::to_string(statusCode) + " " + getStatusMessage(statusCode) + "\r\n";
-    response += "Content-Type: " + contentType + "\r\n";
-    response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    response += "\r\n"; // Fin des en-têtes
-    response += body;   // Corps de la réponse
-    return response;
-}
-
-std::string getStatusMessage(int statusCode) {
-    switch (statusCode) {
-        case 200: return "OK";
-        case 404: return "Not Found";
-        case 500: return "Internal Server Error";
-        default: return "Unknown Status";
-    }
-}
