@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <fstream>
 #include <string.h>
+#include <vector>
+#include <limits>
 
 class HttpRequest
 {

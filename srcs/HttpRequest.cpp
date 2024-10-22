@@ -51,34 +51,40 @@ std::string HttpRequest::handleRequest()
 std::string HttpRequest::handleGet()
 {
     std::string response;
-    std::ifstream file(("." + this->_path).c_str());
+    std::ifstream file(("." + this->_path).c_str(), std::ios::binary);
 
     if (file.is_open())
     {
         file.seekg(0, std::ios::end);
         std::streamsize size = file.tellg();
-        file.seekg(0, std::ios::beg);
-        
-        char* buffer = new char[size + 1]; // Allouer de la mémoire pour le contenu du fichier
-        if (file.read(buffer, size))
-        {
-            buffer[size] = '\0'; // Null-terminate the string
-            std::string fileContent(buffer);
-            delete[] buffer; // Libérer la mémoire
 
-            std::ostringstream oss;
-            oss << fileContent.size(); // Utilisation de std::ostringstream pour la conversion
-            response = "HTTP/1.1 200 OK\r\n";
-            response += "Content-Length: " + oss.str() + "\r\n"; // Remplacer std::to_string
-            response += "Content-Type: text/html\r\n";
-            response += "\r\n";
-            response += fileContent;
+        // Vérifier si la taille du fichier est valide et non négative
+        if (size > 0 && size < std::numeric_limits<std::streamsize>::max())
+        {
+            file.seekg(0, std::ios::beg);
+            
+            // Utilisation de std::vector<char> pour allouer de la mémoire en fonction de la taille
+            std::vector<char> buffer(static_cast<size_t>(size));
+
+            if (file.read(buffer.data(), size))
+            {
+                std::string fileContent(buffer.data(), size);  // Convertir le contenu en std::string
+
+                std::ostringstream oss;
+                oss << fileContent.size();
+                response = "HTTP/1.1 200 OK\r\n";
+                response += "Content-Length: " + oss.str() + "\r\n";
+                response += "Content-Type: text/html\r\n";
+                response += "\r\n";
+                response += fileContent;
+            }
         }
     }
     else
         response = "HTTP/1.1 404 Not Found\r\n\r\n";
     return response;
 }
+
 
 
 std::string HttpRequest::handlePost()

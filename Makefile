@@ -17,7 +17,7 @@ INC_DIR = incl
 OBJ_DIR = objs
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -I$(INC_DIR)
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g3 -I$(INC_DIR)
 
 SRCS = $(SRC_DIR)/main.cpp $(SRC_DIR)/Server.cpp $(SRC_DIR)/HttpRequest.cpp
 OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
