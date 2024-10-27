@@ -9,23 +9,23 @@ const std::string& ServerLocation::getPath() const
     return path;
 }
 
-void ServerLocation::setRoot(const std::string& rootPath)
+void ServerLocation::setRootLocation(const std::string& rootPath)
 {
     root = rootPath;
 }
 
-const std::string& ServerLocation::getRoot() const
+const std::string& ServerLocation::getRootLocation() const
 {
     return root;
 }
 
-void ServerLocation::setIndex(const std::string& indexPage)
+void ServerLocation::setIndexLocation(const std::string& indexPage)
 {
     index = indexPage;
     this->display();
 }
 
-const std::string& ServerLocation::getIndex() const
+const std::string& ServerLocation::getIndexLocation() const
 {
     return index;
 }
