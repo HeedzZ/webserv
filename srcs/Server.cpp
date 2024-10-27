@@ -12,6 +12,8 @@
 
 #include "Server.hpp"
 #include "HttpRequest.hpp"
+#include "ServerConfig.hpp"
+
 
 std::string intToString(int value) {
     std::ostringstream oss;
@@ -59,7 +61,7 @@ void Server::listenSocket() {
 }
 
 // Boucle principale du serveur
-void Server::run() {
+void Server::run(ServerConfig config) {
     while (true) {
         int poll_count = poll(_poll_fds.data(), _poll_fds.size(), -1);
         if (poll_count < 0) {
@@ -73,7 +75,7 @@ void Server::run() {
                 if (_poll_fds[i].fd == _server_fd) {
                     handleNewConnection();
                 } else {
-                    handleClientRequest(i);
+                    handleClientRequest(i, config);
                 }
             }
         }
@@ -106,8 +108,10 @@ void Server::removeClient(int index) {
     std::cout << "Connexion client fermée" << std::endl;
 }
 
-void Server::handleClientRequest(int clientIndex) {
+void Server::handleClientRequest(int clientIndex, ServerConfig config)
+{
     HttpRequest request;
+    
     int client_fd = _poll_fds[clientIndex].fd;
     std::string buffer;
     char tempBuffer[1024];
@@ -134,16 +138,16 @@ void Server::handleClientRequest(int clientIndex) {
 
     // Gérer la requête HTTP et analyser le chemin demandé
     request.parseHttpRequest(buffer);
-    std::string requestedPath = request.getPath();
-
+    std::string requestedPath = config.getIndex();
+    //std::cout << requestedPath << " cheminnnnnnnnn" << std::endl;
     // Si aucun chemin n'est spécifié, servir "html/index.html"
     if (requestedPath == "/") {
         requestedPath = "/index.html";
     }
 
     // Ajouter "html/" devant chaque chemin demandé
-    std::string fullPath = "html" + requestedPath;
-
+    std::string fullPath = "html/" + requestedPath;
+    //std::cout << "fullpath :   " << fullPath << std::endl;////////////////////////////////////////
     // Tenter d'ouvrir le fichier demandé
     std::ifstream file(fullPath.c_str());
     if (file) {

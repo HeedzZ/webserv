@@ -15,18 +15,23 @@
 
 int main(void)
 {
-    // Crée une instance du serveur sur le port 8080
-    ServerConfig config("server.conf");
-    config.parseConfigFile();
-    Server server(config.getPort());
+    ServerConfig config;
+    
+    if (!config.parseConfigFile("server.conf"))
+    {
+        std::cout << "Failed to parse configuration file." << std::endl;
+        return 1;
+    }
+    config.display();
+    Server server(config.getPort()); // faire en sorte que lorsqu'on met
+                                    //localhost:8081/Yann alors il cherche le /Yann
+                                    //dans le vecteur de ServeurLocation pour adapter le root du serv
 
-    // Initialise le socket, le lie à l'adresse et le met en écoute
     server.initSocket();
     server.bindSocket();
     server.listenSocket();
 
-    // Démarre la boucle principale pour gérer les connexions
-    server.run();
+    server.run(config);
 
     return 0;
 }

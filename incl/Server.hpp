@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <poll.h>
 #include <sstream>
+#include "ServerConfig.hpp"
 
 class Server {
 public:
@@ -32,9 +33,9 @@ public:
     void initSocket();               // Crée le socket et le configure
     void bindSocket();               // Attache le socket à une adresse et un port
     void listenSocket();             // Met le socket en écoute
-    void run();                      // Boucle principale qui gère les connexions et les requêtes
+    void run(ServerConfig config);                      // Boucle principale qui gère les connexions et les requêtes
     void handleNewConnection();      // Gère l'acceptation des nouvelles connexions
-    void handleClientRequest(int clientIndex); // Traite les requêtes des clients connectés
+    void handleClientRequest(int clientIndex, ServerConfig config); // Traite les requêtes des clients connectés
 
 private:
     int _server_fd;                  // Descripteur de fichier du socket serveur

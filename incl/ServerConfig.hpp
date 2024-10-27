@@ -1,32 +1,44 @@
 #ifndef SERVERCONFIG_HPP
 #define SERVERCONFIG_HPP
 
-#include <iostream>
-#include <iostream>
-#include <fstream> 
-#include <sstream>
-#include <string>  
-#include <cstdlib>
+#include <string>
+#include <vector>
 #include <map>
-#include <vector>  
-
+#include "ServerLocation.hpp"
+#include <fstream>
+#include <sstream>
 
 class ServerConfig {
-
 private:
-	std::string _pathToConfig;
-	int _port;
-    std::string _server_name;
-    std::string _root;
-    std::string _index;
-    std::map<int, std::string> _error_pages;
+    int port;                                 // Server listening port
+    std::string root;                         // Server root directory
+    std::string index;                        // Default index file
+    std::map<int, std::string> error_pages;   // Error pages (404, 403, etc.)
+    std::vector<ServerLocation> locations;    // List of location blocks
 
 public:
-	ServerConfig(std::string av);
-	void	parseConfigFile();
-	~ServerConfig();
+    // Default constructor
+    ServerConfig();
 
-	int getPort();
+    // Getters and Setters
+    void setPort(int serverPort);
+    int getPort() const;
+
+    void setRoot(const std::string& rootPath);
+    const std::string& getRoot() const;
+
+    void setIndex(const std::string& indexPage);
+    const std::string& getIndex() const;
+
+    void setErrorPage(int code, const std::string& path);
+    const std::map<int, std::string>& getErrorPages() const;
+
+    void addLocation(const ServerLocation& location);
+    const std::vector<ServerLocation>& getLocations() const;
+
+    void display() const;
+	bool parseConfigFile(const std::string& filepath);
+    std::string extractLocationPath(const std::string& line);
 };
 
 #endif
