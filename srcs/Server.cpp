@@ -126,72 +126,89 @@ void Server::removeClient(int index)
 
 void Server::handleClientRequest(int clientIndex, ServerConfig config)
 {
-    HttpRequest request;
-    
     int client_fd = _poll_fds[clientIndex].fd;
+
+    std::string buffer = readClientRequest(client_fd, clientIndex);
+    if (buffer.empty()) return;
+    std::cout << "Requête reçue : \n" << buffer << std::endl;
+
+    std::string requestedPath = extractRequestedPath(buffer, config);
+
+    std::string response = generateHttpResponse(requestedPath);
+    send(client_fd, response.c_str(), response.size(), 0);
+}
+
+
+
+std::string Server::readClientRequest(int client_fd, int clientIndex)
+{
     std::string buffer;
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    // Lire les données du client
     while (true)
     {
         bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
         if (bytes_read <= 0)
         {
             removeClient(clientIndex);
-            return;
+            return "";
         }
 
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
-
-        // Vérifier la fin de la requête HTTP
         if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
     }
 
-    std::cout << "Requête reçue : \n" << buffer << std::endl;
+    return buffer;
+}
 
-    // Gérer la requête HTTP et analyser le chemin demandé
-    request.parseHttpRequest(buffer);
-    std::string requestedPath = config.getIndex();
-    // Si aucun chemin n'est spécifié, servir "html/index.html"
+std::string Server::extractRequestedPath(const std::string& buffer, const ServerConfig& config)
+{
+    // Extraire le chemin demandé depuis la requête HTTP
+    size_t pathStart = buffer.find(" ") + 1;
+    size_t pathEnd = buffer.find(" ", pathStart);
+    std::string requestedPath;
+
+    if (pathStart != std::string::npos && pathEnd != std::string::npos)
+        requestedPath = buffer.substr(pathStart, pathEnd - pathStart);
+    else
+        requestedPath = "/";
+
     if (requestedPath == "/")
-        requestedPath = "/index.html";
+    {
+        requestedPath = config.getIndex();
+        if (requestedPath.empty())
+            requestedPath = "/index.html";
+    }
 
-    // Ajouter "html/" devant chaque chemin demandé
-    std::string fullPath = "html/" + requestedPath;
-    // Tenter d'ouvrir le fichier demandé
-    std::ifstream file(fullPath.c_str());
+    return "html/" + requestedPath;
+}
+
+std::string Server::generateHttpResponse(const std::string& requestedPath)
+{
+    std::ifstream file(requestedPath.c_str());
     if (file)
     {
         std::stringstream buffer;
         buffer << file.rdbuf();
         std::string body = buffer.str();
 
-        // Construire la réponse HTTP
-        std::string response = "HTTP/1.1 200 OK\r\n"
-                               "Content-Type: text/html\r\n"
-                               "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
-                               body;
-
-        send(client_fd, response.c_str(), response.size(), 0);
+        return "HTTP/1.1 200 OK\r\n"
+               "Content-Type: text/html\r\n"
+               "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
+               body;
     }
     else
     {
-        // Si le fichier n'existe pas, renvoyer une erreur 404
         std::string body = "<html><body><h1>404 Not Found</h1></body></html>";
-        std::string response = "HTTP/1.1 404 Not Found\r\n"
-                               "Content-Type: text/html\r\n"
-                               "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
-                               body;
-
-        send(client_fd, response.c_str(), response.size(), 0);
+        return "HTTP/1.1 404 Not Found\r\n"
+               "Content-Type: text/html\r\n"
+               "Content-Length: " + intToString(body.size()) + "\r\n\r\n" +
+               body;
     }
 }
-
-
 
 
 

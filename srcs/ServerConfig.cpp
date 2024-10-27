@@ -64,6 +64,7 @@ std::string ServerConfig::extractLocationPath(const std::string& line)
     return path;
 }
 
+// start parsing
 bool ServerConfig::parseConfigFile(const std::string& filepath)
 {
     std::ifstream configFile(filepath.c_str());
@@ -75,89 +76,92 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
 
     std::string line;
     ServerLocation* currentLocation = NULL;
-    bool inLocationBlock = false; // Variable d'état pour suivre si on est dans un bloc `location`
+    bool inLocationBlock = false;
 
     while (std::getline(configFile, line))
     {
         if (line.empty() || line[0] == '#')
             continue;
 
-        std::istringstream iss(line);
         std::string token;
+        std::istringstream iss(line);
         iss >> token;
 
-        // Détecter le début d'un bloc server
         if (token == "server" && line.find('{') != std::string::npos)
             continue;
 
-        // Si on est dans un bloc server principal (inLocationBlock == false)
         if (!inLocationBlock)
         {
-            if (token == "listen")
+            if (token == "location")
             {
-                int port;
-                iss >> port;
-                setPort(port);
-            }
-            else if (token == "root")
-            {
-                std::string rootPath;
-                iss >> rootPath;
-                rootPath.resize(rootPath.size() - 1);
-                setRoot(rootPath);
-            }
-            else if (token == "index")
-            {
-                std::string indexPage;
-                iss >> indexPage;
-                indexPage.resize(indexPage.size() - 1);
-                setIndex(indexPage);
-            }
-            else if (token == "error_page")
-            {
-                int code;
-                std::string path;
-                iss >> code >> path;
-                path.resize(path.size() - 1);
-                setErrorPage(code, path);
-            }
-            else if (token == "location")
-            {
-                // Début d'un bloc `location`
                 std::string locationPath = extractLocationPath(line);
                 currentLocation = new ServerLocation(locationPath);
                 locations.push_back(*currentLocation);
-                inLocationBlock = true; // On entre dans un bloc `location`
+                inLocationBlock = true;
             }
+            else
+                parseServerDirective(token, iss);
         }
-        // Sinon, on est dans un bloc `location` (inLocationBlock == true)
-        else if (inLocationBlock)
-        {
-            if (token == "root")
-            {
-                std::string rootValue = line.substr(line.find(token) + token.length() + 1);
-                rootValue.resize(rootValue.size() - 2); // Retirer le dernier caractère ";"
-                currentLocation->setRootLocation(rootValue);
-            }
-            else if (token == "index")
-            {
-                std::string indexValue = line.substr(line.find(token) + token.length() + 1);
-                indexValue.resize(indexValue.size() - 2);
-                currentLocation->setIndexLocation(indexValue);
-            }
-            else if (token == "}") // Fin du bloc `location`
-            {
-                inLocationBlock = false;
-                currentLocation = NULL; // Sortie du bloc `location`
-            }
-        }
+        else
+            parseLocationDirective(token, line, currentLocation, inLocationBlock);
     }
 
     return true;
 }
 
+// parse server config
+void ServerConfig::parseServerDirective(const std::string& token, std::istringstream& iss)
+{
+    if (token == "listen")
+    {
+        int port;
+        iss >> port;
+        setPort(port);
+    }
+    else if (token == "root")
+    {
+        std::string rootPath;
+        iss >> rootPath;
+        rootPath.resize(rootPath.size() - 1);
+        setRoot(rootPath);
+    }
+    else if (token == "index")
+    {
+        std::string indexPage;
+        iss >> indexPage;
+        indexPage.resize(indexPage.size() - 1);
+        setIndex(indexPage);
+    }
+    else if (token == "error_page")
+    {
+        int code;
+        std::string path;
+        iss >> code >> path;
+        path.resize(path.size() - 1);
+        setErrorPage(code, path);
+    }
+}
 
-
+//parse Locations config
+void ServerConfig::parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock)
+{
+    if (token == "root")
+    {
+        std::string rootValue = line.substr(line.find(token) + token.length() + 1);
+        rootValue.resize(rootValue.size() - 2);
+        currentLocation->setRootLocation(rootValue);
+    }
+    else if (token == "index")
+    {
+        std::string indexValue = line.substr(line.find(token) + token.length() + 1);
+        indexValue.resize(indexValue.size() - 2);
+        currentLocation->setIndexLocation(indexValue);
+    }
+    else if (token == "}")
+    {
+        inLocationBlock = false;
+    }
+}
 
 void ServerConfig::display() const
 {

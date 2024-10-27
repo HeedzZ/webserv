@@ -38,6 +38,9 @@ public:
 
     void display() const;
 	bool parseConfigFile(const std::string& filepath);
+    void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);
+    void parseServerDirective(const std::string& token, std::istringstream& iss);
+
     std::string extractLocationPath(const std::string& line);
 };
 

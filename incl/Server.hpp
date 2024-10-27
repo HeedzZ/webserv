@@ -36,6 +36,11 @@ public:
     void run(ServerConfig config);                      // Boucle principale qui gère les connexions et les requêtes
     void handleNewConnection();      // Gère l'acceptation des nouvelles connexions
     void handleClientRequest(int clientIndex, ServerConfig config); // Traite les requêtes des clients connectés
+    std::string generateHttpResponse(const std::string& requestedPath);
+    std::string extractRequestedPath(const std::string& buffer, const ServerConfig& config);
+    std::string readClientRequest(int client_fd, int clientIndex);
+
+
 
 private:
     int _server_fd;                  // Descripteur de fichier du socket serveur
