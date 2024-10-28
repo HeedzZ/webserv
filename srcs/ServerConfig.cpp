@@ -158,9 +158,7 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
         currentLocation->setIndexLocation(indexValue);
     }
     else if (token == "}")
-    {
         inLocationBlock = false;
-    }
 }
 
 void ServerConfig::display() const

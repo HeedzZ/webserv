@@ -17,7 +17,7 @@ int main(void)
 {
     ServerConfig config;
     
-    if (!config.parseConfigFile("server.conf"))
+    if (!config.parseConfigFile("Bad.conf"))
     {
         std::cout << "Failed to parse configuration file." << std::endl;
         return 1;
