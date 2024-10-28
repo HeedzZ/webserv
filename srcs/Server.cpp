@@ -126,7 +126,6 @@ void Server::removeClient(int index)
 
 void Server::handleClientRequest(int clientIndex, ServerConfig config)
 {
-    (void)config;
     int client_fd = _poll_fds[clientIndex].fd;
 
     std::string buffer = readClientRequest(client_fd, clientIndex);
@@ -135,7 +134,7 @@ void Server::handleClientRequest(int clientIndex, ServerConfig config)
 
     HttpRequest request(buffer);
 
-    std::string response = request.handleRequest();
+    std::string response = request.handleRequest(config);
     send(client_fd, response.c_str(), response.size(), 0);
 }
 

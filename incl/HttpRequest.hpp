@@ -11,6 +11,8 @@
 #include <string.h>
 #include <vector>
 #include <limits>
+#include "ServerConfig.hpp"
+#include "ServerLocation.hpp"
 
 class HttpRequest
 {
@@ -24,8 +26,8 @@ private:
 public:
 	HttpRequest(const std::string rawRequest);
 	~HttpRequest();
-	std::string handleRequest();
-	std::string handleGet();
+	std::string handleRequest(ServerConfig& config);
+	std::string handleGet(ServerConfig& config);
 	std::string handlePost();
 	std::string handleDelete();
 	std::string getPath() const;

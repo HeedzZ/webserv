@@ -1,5 +1,6 @@
 #include "HttpRequest.hpp"
 
+
 HttpRequest::HttpRequest(const std::string rawRequest)
 {
     std::string	line;
@@ -23,10 +24,10 @@ HttpRequest::HttpRequest(const std::string rawRequest)
         std::getline(requestStream, _body, '\0');
 }
 
-std::string HttpRequest::handleRequest()
+std::string HttpRequest::handleRequest(ServerConfig& config)
 {
 	if (this->_method.compare("GET") == 0)
-		return handleGet();
+		return handleGet(config);
 	else if (this->_method.compare("POST") == 0)
 		return handlePost();
 	else if (this->_method.compare("DELETE") == 0)
@@ -38,29 +39,40 @@ std::string HttpRequest::handleRequest()
 
 
 
-std::string HttpRequest::handleGet()
+std::string HttpRequest::handleGet(ServerConfig& config)
 {
     std::string response;
-    std::cout << (this->_path).c_str() << std::endl;
-    std::ifstream file((this->_path).c_str(), std::ios::binary);
+    std::string fullPath;
 
-    if (file.is_open())
-    {
+    // Check if the request path matches any defined locations
+    bool locationFound = false;
+    const std::vector<ServerLocation>& locations = config.getLocations();
+    std::cout << locations[0].getPath() << std::endl;
+    for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it) {
+        if (this->_path == it->getPath()) {
+            fullPath = it->getIndex();  // Use the root specified for this location
+            locationFound = true;
+            std::cout << "LOCATION FOUND full path: " << fullPath << std::endl;
+            break;
+        }
+    }
+
+    // Si aucune location correspondante n'a été trouvée
+    if (!locationFound) {
+        return "HTTP/1.1 404 Not Found\r\n\r\n";
+    }
+
+    // Ouvrir et lire le fichier correspondant
+    std::ifstream file(fullPath.c_str(), std::ios::binary);
+    std::cout << fullPath.c_str() << std::endl;
+    if (file.is_open()) {
         file.seekg(0, std::ios::end);
         std::streamsize size = file.tellg();
-
-        // Vérifier si la taille du fichier est valide et non négative
-        if (size > 0 && size < std::numeric_limits<std::streamsize>::max())
-        {
+        if (size > 0 && size < std::numeric_limits<std::streamsize>::max()) {
             file.seekg(0, std::ios::beg);
-            
-            // Utilisation de std::vector<char> pour allouer de la mémoire en fonction de la taille
             std::vector<char> buffer(static_cast<size_t>(size));
-
-            if (file.read(buffer.data(), size))
-            {
-                std::string fileContent(buffer.data(), size);  // Convertir le contenu en std::string
-
+            if (file.read(buffer.data(), size)) {
+                std::string fileContent(buffer.data(), size);
                 std::ostringstream oss;
                 oss << fileContent.size();
                 response = "HTTP/1.1 200 OK\r\n";
@@ -70,9 +82,9 @@ std::string HttpRequest::handleGet()
                 response += fileContent;
             }
         }
-    }
-    else
+    } else {
         response = "HTTP/1.1 404 Not Found\r\n\r\n";
+    }
     return response;
 }
 
