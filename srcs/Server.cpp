@@ -22,7 +22,12 @@ std::string intToString(int value)
     return oss.str();
 }
 
+<<<<<<< HEAD
 Server::Server(int port) : _server_fd(0), _addrlen(sizeof(_address)), _port(port)
+=======
+// Constructeur
+Server::Server(int port, ServerConfig config) : _server_fd(0), _addrlen(sizeof(_address)), _port(port), _config(config)
+>>>>>>> refs/remotes/origin/main
 {}
 
 // Crée et configure le socket du serveur
@@ -130,9 +135,9 @@ void Server::handleClientRequest(int clientIndex, ServerConfig config)
     if (buffer.empty()) return;
     std::cout << "Requête reçue : \n" << buffer << std::endl;
 
-    std::string requestedPath = extractRequestedPath(buffer, config);
+    HttpRequest request(buffer);
 
-    std::string response = generateHttpResponse(requestedPath);
+    std::string response = request.handleRequest(config);
     send(client_fd, response.c_str(), response.size(), 0);
 }
 

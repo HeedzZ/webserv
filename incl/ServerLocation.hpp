@@ -17,11 +17,11 @@ public:
 
     // Getters and Setters
     const std::string& getPath() const;
-    void setRootLocation(const std::string& rootPath);
-    const std::string& getRootLocation() const;
+    void setRoot(const std::string& rootPath);
+    const std::string& getRoot() const;
     
-    void setIndexLocation(const std::string& indexPage);
-    const std::string& getIndexLocation() const;
+    void setIndex(const std::string& indexPage);
+    const std::string& getIndex() const;
 
     void addCgiExtension(const std::string& extension, const std::string& program);
     const std::map<std::string, std::string>& getCgiExtensions() const;

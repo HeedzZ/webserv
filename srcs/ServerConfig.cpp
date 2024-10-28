@@ -149,13 +149,13 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
     {
         std::string rootValue = line.substr(line.find(token) + token.length() + 1);
         rootValue.resize(rootValue.size() - 2);
-        currentLocation->setRootLocation(rootValue);
+        currentLocation->setRoot(rootValue);
     }
     else if (token == "index")
     {
         std::string indexValue = line.substr(line.find(token) + token.length() + 1);
         indexValue.resize(indexValue.size() - 2);
-        currentLocation->setIndexLocation(indexValue);
+        currentLocation->setIndex(indexValue);
     }
     else if (token == "}")
         inLocationBlock = false;

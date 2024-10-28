@@ -23,7 +23,7 @@ int main(void)
         return 1;
     }
     config.display();
-    Server server(config.getPort()); // faire en sorte que lorsqu'on met
+    Server server(config.getPort(), config); // faire en sorte que lorsqu'on met
                                     //localhost:8081/Yann alors il cherche le /Yann
                                     //dans le vecteur de ServeurLocation pour adapter le root du serv
 
