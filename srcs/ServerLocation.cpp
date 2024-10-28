@@ -11,7 +11,7 @@ const std::string& ServerLocation::getPath() const
 
 void ServerLocation::setRoot(const std::string& rootPath)
 {
-    root = rootPath;
+    this->root = rootPath;
 }
 
 const std::string& ServerLocation::getRoot() const
@@ -21,8 +21,7 @@ const std::string& ServerLocation::getRoot() const
 
 void ServerLocation::setIndex(const std::string& indexPage)
 {
-    index = indexPage;
-    this->display();
+    this->index = indexPage;
 }
 
 const std::string& ServerLocation::getIndex() const

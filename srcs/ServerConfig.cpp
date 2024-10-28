@@ -96,14 +96,18 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
             {
                 std::string locationPath = extractLocationPath(line);
                 currentLocation = new ServerLocation(locationPath);
-                locations.push_back(*currentLocation);
                 inLocationBlock = true;
+                parseLocationDirective(token, line, currentLocation, inLocationBlock);
             }
             else
                 parseServerDirective(token, iss);
         }
         else
+        {
+            if (token == "}")
+                locations.push_back(*currentLocation);
             parseLocationDirective(token, line, currentLocation, inLocationBlock);
+        }
     }
 
     return true;
