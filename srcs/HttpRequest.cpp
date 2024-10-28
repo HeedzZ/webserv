@@ -1,13 +1,8 @@
 #include "HttpRequest.hpp"
 
-HttpRequest::HttpRequest()
+HttpRequest::HttpRequest(const std::string rawRequest)
 {
-}
-
-HttpRequest HttpRequest::parseHttpRequest(const std::string rawRequest)
-{
-	HttpRequest request;
-	std::string	line;
+    std::string	line;
 	std::istringstream requestStream(rawRequest);
 
 	std::getline(requestStream, line);
@@ -24,9 +19,8 @@ HttpRequest HttpRequest::parseHttpRequest(const std::string rawRequest)
             _headers[headerName] = headerValue;
         }
 	}
-	if (request._method == "POST")
+	if (_method == "POST")
         std::getline(requestStream, _body, '\0');
-	return (request);
 }
 
 std::string HttpRequest::handleRequest()
@@ -42,10 +36,13 @@ std::string HttpRequest::handleRequest()
 	
 }
 
+
+
 std::string HttpRequest::handleGet()
 {
     std::string response;
-    std::ifstream file(("." + this->_path).c_str(), std::ios::binary);
+    std::cout << (this->_path).c_str() << std::endl;
+    std::ifstream file((this->_path).c_str(), std::ios::binary);
 
     if (file.is_open())
     {

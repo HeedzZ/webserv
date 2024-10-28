@@ -22,9 +22,8 @@ private:
     std::map<std::string, std::string> _headers;
 	
 public:
-	HttpRequest();
+	HttpRequest(const std::string rawRequest);
 	~HttpRequest();
-	HttpRequest parseHttpRequest(const std::string rawRequest);
 	std::string handleRequest();
 	std::string handleGet();
 	std::string handlePost();

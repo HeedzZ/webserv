@@ -27,7 +27,7 @@
 class Server {
 public:
     // Constructeur
-    Server(int port);
+    Server(int port, ServerConfig config);
 
     // Méthodes principales
     void initSocket();               // Crée le socket et le configure
@@ -48,6 +48,7 @@ private:
     int _addrlen;                    // Taille de la structure d'adresse
     int _port;                       // Port sur lequel le serveur écoute
     std::vector<pollfd> _poll_fds;   // Vecteur de pollfd pour gérer les connexions client
+    ServerConfig    _config;
 
     void addClient(int client_fd);   // Ajoute un client au vecteur de poll
     void removeClient(int index);    // Supprime un client du vecteur de poll

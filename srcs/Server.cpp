@@ -23,7 +23,7 @@ std::string intToString(int value)
 }
 
 // Constructeur
-Server::Server(int port) : _server_fd(0), _addrlen(sizeof(_address)), _port(port)
+Server::Server(int port, ServerConfig config) : _server_fd(0), _addrlen(sizeof(_address)), _port(port), _config(config)
 {}
 
 // Crée et configure le socket du serveur
@@ -126,15 +126,16 @@ void Server::removeClient(int index)
 
 void Server::handleClientRequest(int clientIndex, ServerConfig config)
 {
+    (void)config;
     int client_fd = _poll_fds[clientIndex].fd;
 
     std::string buffer = readClientRequest(client_fd, clientIndex);
     if (buffer.empty()) return;
     std::cout << "Requête reçue : \n" << buffer << std::endl;
 
-    std::string requestedPath = extractRequestedPath(buffer, config);
+    HttpRequest request(buffer);
 
-    std::string response = generateHttpResponse(requestedPath);
+    std::string response = request.handleRequest();
     send(client_fd, response.c_str(), response.size(), 0);
 }
 
