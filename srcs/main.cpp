@@ -13,11 +13,13 @@
 #include "Server.hpp"
 #include "ServerConfig.hpp"
 
-int main(void)
+int main(int argc, char **argv)
 {
+
     ServerConfig config;
-    
-    if (!config.parseConfigFile("Bad.conf"))
+    if (argc != 2)
+        return (1);
+    if (!config.parseConfigFile(argv[1]))
     {
         std::cout << "Failed to parse configuration file." << std::endl;
         return 1;

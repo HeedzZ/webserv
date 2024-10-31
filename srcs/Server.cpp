@@ -22,12 +22,8 @@ std::string intToString(int value)
     return oss.str();
 }
 
-<<<<<<< HEAD
-Server::Server(int port) : _server_fd(0), _addrlen(sizeof(_address)), _port(port)
-=======
 // Constructeur
 Server::Server(int port, ServerConfig config) : _server_fd(0), _addrlen(sizeof(_address)), _port(port), _config(config)
->>>>>>> refs/remotes/origin/main
 {}
 
 // Crée et configure le socket du serveur
