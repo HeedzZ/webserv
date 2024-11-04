@@ -15,25 +15,9 @@
 
 int main(int argc, char **argv)
 {
-
-    ServerConfig config;
     if (argc != 2)
         return (1);
-    if (!config.parseConfigFile(argv[1]))
-    {
-        std::cout << "Failed to parse configuration file." << std::endl;
-        return 1;
-    }
-    config.display();
-    Server server(config.getPort(), config); // faire en sorte que lorsqu'on met
-                                    //localhost:8081/Yann alors il cherche le /Yann
-                                    //dans le vecteur de ServeurLocation pour adapter le root du serv
-
-    server.initSocket();
-    server.bindSocket();
-    server.listenSocket();
-
-    server.run(config);
-
+    Server server(argv[1]);
+    server.run();
     return 0;
 }

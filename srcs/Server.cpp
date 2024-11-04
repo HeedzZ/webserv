@@ -23,107 +23,109 @@ std::string intToString(int value)
 }
 
 // Constructeur
-Server::Server(int port, ServerConfig config) : _server_fd(0), _addrlen(sizeof(_address)), _port(port), _config(config)
-{}
-
-// Crée et configure le socket du serveur
-void Server::initSocket()
+Server::Server(const std::string& configFile) : _server_fds(0)
 {
-    _server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (_server_fd < 0)
-    {
-        std::cerr << "Erreur : création du socket échouée" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
-    _address.sin_family = AF_INET;
-    _address.sin_addr.s_addr = INADDR_ANY;
-    _address.sin_port = htons(_port);
+    _config.parseConfigFile(configFile);
+    _ports = _config.getPorts();
+    _config.display();
+    initSockets();
 }
-
-// Attache le socket à une adresse et un port
-void Server::bindSocket()
-{
-    if (bind(_server_fd, (sockaddr*)&_address, sizeof(_address)) < 0)
-    {
-        std::cerr << "Erreur : bind échoué" << std::endl;
-        exit(EXIT_FAILURE);
+Server::~Server() {
+    for (size_t i = 0; i < _server_fds.size(); ++i) {
+        close(_server_fds[i]);
     }
 }
 
-// Met le socket en écoute pour les connexions entrantes
-void Server::listenSocket()
-{
-    if (listen(_server_fd, 10) < 0)
-    {
-        std::cerr << "Erreur : listen échoué" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    std::cout << "Serveur en écoute sur le port " << _port << std::endl;
+void Server::initSockets() {
+    for (size_t i = 0; i < _ports.size(); ++i) {
+        int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (server_fd < 0) {
+            std::cerr << "Erreur : création du socket échouée pour le port " << _ports[i] << std::endl;
+            exit(EXIT_FAILURE);
+        }
 
-    // Ajouter le socket du serveur au vecteur pour poll
-    pollfd server_poll_fd;
-    server_poll_fd.fd = _server_fd;
-    server_poll_fd.events = POLLIN; // Surveiller les nouvelles connexions
-    _poll_fds.push_back(server_poll_fd);
+        // Activer l'option SO_REUSEADDR
+        int opt = 1;
+        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            std::cerr << "Erreur : setsockopt(SO_REUSEADDR) échouée" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        sockaddr_in address;
+        std::memset(&address, 0, sizeof(address));
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = INADDR_ANY;
+        address.sin_port = htons(_ports[i]);
+        _addresses.push_back(address);
+
+        if (bind(server_fd, (sockaddr*)&_addresses[i], sizeof(_addresses[i])) < 0) {
+            std::cerr << "Erreur : bind échoué pour le port " << _ports[i] << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        if (listen(server_fd, 10) < 0) {
+            std::cerr << "Erreur : listen échoué pour le port " << _ports[i] << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        _server_fds.push_back(server_fd);
+
+        struct pollfd server_poll_fd;
+        server_poll_fd.fd = server_fd;
+        server_poll_fd.events = POLLIN;
+        _poll_fds.push_back(server_poll_fd);
+
+        std::cout << "Serveur en écoute sur le port " << _ports[i] << std::endl;
+    }
 }
 
-// Boucle principale du serveur
-void Server::run(ServerConfig config)
-{
-    while (true)
-    {
+void Server::run() {
+    while (true) {
         int poll_count = poll(_poll_fds.data(), _poll_fds.size(), -1);
-        if (poll_count < 0)
-        {
+        if (poll_count < 0) {
             std::cerr << "Erreur : poll() échoué" << std::endl;
             continue;
         }
-        // Parcourir les descripteurs surveillés pour gérer les événements
-        for (size_t i = 0; i < _poll_fds.size(); ++i)
-        {
-            if (_poll_fds[i].revents & POLLIN)
-            {
-                if (_poll_fds[i].fd == _server_fd)
-                    handleNewConnection();
-                else
-                    handleClientRequest(i, config);
+
+        for (size_t i = 0; i < _poll_fds.size(); ++i) {
+            if (_poll_fds[i].revents & POLLIN) {
+                if (std::find(_server_fds.begin(), _server_fds.end(), _poll_fds[i].fd) != _server_fds.end()) {
+                    handleNewConnection(_poll_fds[i].fd);
+                } else {
+                    handleClientRequest(i);
+                }
             }
         }
     }
 }
 
-// Gère l'acceptation des nouvelles connexions
-void Server::handleNewConnection()
-{
-    int new_socket = accept(_server_fd, (sockaddr*)&_address, (socklen_t*)&_addrlen);
-    if (new_socket < 0)
-    {
+void Server::handleNewConnection(int server_fd) {
+    sockaddr_in client_address;
+    socklen_t client_len = sizeof(client_address);
+    int client_fd = accept(server_fd, (sockaddr*)&client_address, &client_len);
+    if (client_fd < 0) {
         std::cerr << "Erreur : accept() échoué" << std::endl;
         return;
     }
-    std::cout << "Nouvelle connexion acceptée" << std::endl;
-    addClient(new_socket);
-}
 
-// Ajoute un client au vecteur de poll
-void Server::addClient(int client_fd)
-{
     pollfd client_poll_fd;
     client_poll_fd.fd = client_fd;
-    client_poll_fd.events = POLLIN; // Surveiller les données reçues
+    client_poll_fd.events = POLLIN;
     _poll_fds.push_back(client_poll_fd);
+
+    // Trouver le port du serveur correspondant à server_fd
+    int server_port = 0;
+    for (size_t i = 0; i < _server_fds.size(); ++i) {
+        if (_server_fds[i] == server_fd) {
+            server_port = _ports[i];
+            break;
+        }
+    }
+
+    std::cout << "Nouvelle connexion acceptée sur le port " << server_port << std::endl;
 }
 
-// Supprime un client du vecteur de poll
-void Server::removeClient(int index)
-{
-    close(_poll_fds[index].fd);
-    _poll_fds.erase(_poll_fds.begin() + index);
-    std::cout << "Connexion client fermée" << std::endl;
-}
-
-void Server::handleClientRequest(int clientIndex, ServerConfig config)
+void Server::handleClientRequest(int clientIndex)
 {
     int client_fd = _poll_fds[clientIndex].fd;
 
@@ -133,7 +135,7 @@ void Server::handleClientRequest(int clientIndex, ServerConfig config)
 
     HttpRequest request(buffer);
 
-    std::string response = request.handleRequest(config);
+    std::string response = request.handleRequest(_config);
     send(client_fd, response.c_str(), response.size(), 0);
 }
 
@@ -163,7 +165,7 @@ std::string Server::readClientRequest(int client_fd, int clientIndex)
     return buffer;
 }
 
-std::string Server::extractRequestedPath(const std::string& buffer, const ServerConfig& config)
+std::string Server::extractRequestedPath(const std::string& buffer)
 {
     // Extraire le chemin demandé depuis la requête HTTP
     size_t pathStart = buffer.find(" ") + 1;
@@ -177,7 +179,7 @@ std::string Server::extractRequestedPath(const std::string& buffer, const Server
 
     if (requestedPath == "/")
     {
-        requestedPath = config.getIndex();
+        requestedPath = _config.getIndex();
         if (requestedPath.empty())
             requestedPath = "/index.html";
     }
@@ -209,5 +211,13 @@ std::string Server::generateHttpResponse(const std::string& requestedPath)
     }
 }
 
+void Server::removeClient(int index) {
+    // Ferme le descripteur de fichier du client pour libérer les ressources
+    close(_poll_fds[index].fd);
 
+    // Supprime le descripteur de poll de la liste
+    _poll_fds.erase(_poll_fds.begin() + index);
+
+    std::cout << "Connexion client fermée et supprimée de la liste" << std::endl;
+}
 

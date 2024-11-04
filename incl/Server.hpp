@@ -22,31 +22,32 @@
 #include <unistd.h>
 #include <poll.h>
 #include <sstream>
+#include <algorithm>
 #include "ServerConfig.hpp"
 
 class Server {
 public:
     // Constructeur
-    Server(int port, ServerConfig config);
+    Server(const std::string& configFile);
+    ~Server();
 
     // Méthodes principales
-    void initSocket();               // Crée le socket et le configure
+    void initSockets();               // Crée le socket et le configure
     void bindSocket();               // Attache le socket à une adresse et un port
     void listenSocket();             // Met le socket en écoute
-    void run(ServerConfig config);                      // Boucle principale qui gère les connexions et les requêtes
-    void handleNewConnection();      // Gère l'acceptation des nouvelles connexions
-    void handleClientRequest(int clientIndex, ServerConfig config); // Traite les requêtes des clients connectés
+    void run();                      // Boucle principale qui gère les connexions et les requêtes
+    void handleNewConnection(int server_fd);      // Gère l'acceptation des nouvelles connexions
+    void handleClientRequest(int clientIndex); // Traite les requêtes des clients connectés
     std::string generateHttpResponse(const std::string& requestedPath);
-    std::string extractRequestedPath(const std::string& buffer, const ServerConfig& config);
+    std::string extractRequestedPath(const std::string& buffer);
     std::string readClientRequest(int client_fd, int clientIndex);
 
 
 
 private:
-    int _server_fd;                  // Descripteur de fichier du socket serveur
-    sockaddr_in _address;            // Structure d'adresse pour le serveur
-    int _addrlen;                    // Taille de la structure d'adresse
-    int _port;                       // Port sur lequel le serveur écoute
+    std::vector<int> _server_fds;      // Liste des descripteurs de fichiers des sockets
+    std::vector<int> _ports;           // Liste des ports sur lesquels le serveur écoute
+    std::vector<sockaddr_in> _addresses;                     // Port sur lequel le serveur écoute
     std::vector<pollfd> _poll_fds;   // Vecteur de pollfd pour gérer les connexions client
     ServerConfig    _config;
 
