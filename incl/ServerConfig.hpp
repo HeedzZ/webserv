@@ -10,7 +10,7 @@
 
 class ServerConfig {
 private:
-    int port;                                 // Server listening port
+    std::vector<int> ports;                   // Server listening port
     std::string root;                         // Server root directory
     std::string index;                        // Default index file
     std::map<int, std::string> error_pages;   // Error pages (404, 403, etc.)
@@ -22,7 +22,7 @@ public:
 
     // Getters and Setters
     void setPort(int serverPort);
-    int getPort() const;
+    const std::vector<int>& getPorts() const;
 
     void setRoot(const std::string& rootPath);
     const std::string& getRoot() const;

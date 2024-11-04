@@ -1,17 +1,17 @@
 #include "ServerConfig.hpp"
 #include <iostream>
 
-ServerConfig::ServerConfig() : port(80), root("./www/main"), index("index.html")
+ServerConfig::ServerConfig() : root("./www/main"), index("index.html")
 {}
 
 void ServerConfig::setPort(int serverPort)
 {
-    port = serverPort;
+    ports.push_back(serverPort);
 }
 
-int ServerConfig::getPort() const
+const std::vector<int>& ServerConfig::getPorts() const
 {
-    return port;
+    return ports;
 }
 
 void ServerConfig::setRoot(const std::string& rootPath)
@@ -168,10 +168,30 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
 void ServerConfig::display() const
 {
     std::cout << "Server Configuration:\n";
-    std::cout << "Port: " << port << std::endl;
+
+    std::cout << "Ports: ";
+    for (size_t i = 0; i < ports.size(); ++i)
+    {
+        std::cout << ports[i];
+        if (i < ports.size() - 1)
+            std::cout << ", ";
+    }
+    std::cout << std::endl;
+
     std::cout << "Root: " << root << std::endl;
     std::cout << "Index: " << index << std::endl;
-     std::cout << "Error Pages:\n";
+
+    std::cout << "Error Pages:\n";
     for (std::map<int, std::string>::const_iterator it = error_pages.begin(); it != error_pages.end(); ++it)
+    {
         std::cout << "  Error Code " << it->first << ": " << it->second << "\n";
+    }
+
+    // Afficher les configurations de chaque `ServerLocation`
+    std::cout << "Locations:\n";
+    for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
+    {
+        it->display();
+        std::cout << "-----------------------\n";
+    }
 }
