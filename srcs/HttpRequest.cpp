@@ -29,7 +29,7 @@ std::string HttpRequest::handleRequest(ServerConfig& config)
 	if (this->_method.compare("GET") == 0)
 		return handleGet(config);
 	else if (this->_method.compare("POST") == 0)
-		return handlePost();
+		return handlePost(config);
 	else if (this->_method.compare("DELETE") == 0)
 		return handleDelete();
 	else
@@ -90,21 +90,39 @@ std::string HttpRequest::handleGet(ServerConfig& config)
 
 
 
-std::string HttpRequest::handlePost()
+std::string HttpRequest::handlePost(ServerConfig& config)
 {
     std::string response;
+    std::string targetPath = config.getRoot() + "/uploaded_file.txt"; // Chemin de sauvegarde du fichier
 
-    // Traiter les données envoyées via le body
-    std::ofstream outfile("./uploaded_data.txt");
-    outfile << this->_body;
-    outfile.close();
+    std::cout << "body : " << this->_body << std::endl;
+    std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
+    if (it == this->_headers.end())
+        return "HTTP/1.1 411 Length Required\r\n\r\n";
 
-    response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: text/plain\r\n";
+    int contentLength;
+    std::istringstream lengthStream(it->second);
+    lengthStream >> contentLength;
+
+    if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
+        return "HTTP/1.1 400 Bad Request\r\n\r\n";
+
+    std::ofstream outFile(targetPath.c_str(), std::ios::binary);
+    if (!outFile.is_open())
+        return "HTTP/1.1 500 Internal Server Error\r\n\r\n";
+
+    // Écrire les données dans le fichier
+    outFile.write(this->_body.c_str(), contentLength);
+    outFile.close();
+
+    // Construire la réponse HTTP de succès
+    response = "HTTP/1.1 201 Created\r\n";
+    response += "Content-Length: 0\r\n";
     response += "\r\n";
-    response += "Data received and saved.";
+
     return response;
 }
+
 
 
 std::string HttpRequest::handleDelete()
