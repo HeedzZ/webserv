@@ -64,22 +64,24 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     std::string response;
     std::string fullPath;
 
-    // Check if the request path matches any defined locations
+    // Vérifier si le chemin de la requête correspond à une location définie
     bool locationFound = false;
     const std::vector<ServerLocation>& locations = config.getLocations();
     for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it) {
         if (this->_path == it->getPath()) {
-            fullPath = it->getRoot() + it->getIndex();  // Use the root specified for this location
+            fullPath = it->getRoot() + it->getIndex();  // Utiliser le root spécifié pour cette location
             locationFound = true;
             break;
         }
     }
+    if (locationFound == false)
+        fullPath = config.getRoot() + _path;
 
-    // Si aucune location correspondante n'a été trouvée
-    if (this->_path.compare("/") == 0)
-        fullPath = config.getRoot() + config.getIndex();
-    if (!locationFound && this->_path.compare("/") != 0) {
-        return (findErrorPage(config, 404));
+    // Si aucune location correspondante n'a été trouvée, utiliser la configuration par défaut
+    if (!locationFound) {
+        if (this->_path == "/") {
+            fullPath = config.getRoot() + config.getIndex();  // Page index par défaut
+        }
     }
 
     // Ouvrir et lire le fichier correspondant
@@ -87,54 +89,112 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     if (file.is_open()) {
         file.seekg(0, std::ios::end);
         std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
         if (size > 0 && size < std::numeric_limits<std::streamsize>::max()) {
-            file.seekg(0, std::ios::beg);
             std::vector<char> buffer(static_cast<size_t>(size));
             if (file.read(buffer.data(), size)) {
                 std::string fileContent(buffer.data(), size);
+                
+                // Déterminer le type MIME en utilisant le chemin complet
+                std::string contentType = getMimeType(fullPath);
+
+                // Construire la réponse HTTP
                 std::ostringstream oss;
                 oss << fileContent.size();
                 response = "HTTP/1.1 200 OK\r\n";
                 response += "Content-Length: " + oss.str() + "\r\n";
-                response += "Content-Type: text/html\r\n";
+                response += "Content-Type: " + contentType + "\r\n";
                 response += "\r\n";
                 response += fileContent;
             }
         }
     } else {
-        return (findErrorPage(config, 404));
+        return findErrorPage(config, 404);  // Page d'erreur 404 si le fichier ne peut pas être ouvert
     }
     return response;
 }
 
 
+std::string HttpRequest::getMimeType(const std::string& filePath) {
+    // Tableau associatif pour les types MIME les plus courants
+    std::map<std::string, std::string> mimeTypes;
+    mimeTypes[".html"] = "text/html";
+    mimeTypes[".css"] = "text/css";
+    mimeTypes[".js"] = "application/javascript";
+    mimeTypes[".jpg"] = "image/jpeg";
+    mimeTypes[".jpeg"] = "image/jpeg";
+    mimeTypes[".png"] = "image/png";
+    mimeTypes[".gif"] = "image/gif";
+    mimeTypes[".svg"] = "image/svg+xml";
+    mimeTypes[".ico"] = "image/x-icon";
+    mimeTypes[".json"] = "application/json";
+    mimeTypes[".xml"] = "application/xml";
+    mimeTypes[".txt"] = "text/plain";
+
+    size_t dotPos = filePath.find_last_of('.');
+    if (dotPos != std::string::npos) {
+        std::string extension = filePath.substr(dotPos);
+        if (mimeTypes.count(extension) > 0) {
+            return mimeTypes[extension];
+        }
+    }
+
+    return "application/octet-stream"; // Type MIME par défaut
+}
+
+
+std::string extractJsonValue(const std::string& json, const std::string& key)
+{
+    std::string keyPattern = "\"" + key + "\":\"";
+    size_t keyPos = json.find(keyPattern);
+    if (keyPos == std::string::npos)
+        return "";
+
+    size_t valueStart = keyPos + keyPattern.length();
+    size_t valueEnd = json.find("\"", valueStart);
+    if (valueEnd == std::string::npos)
+        return "";
+
+    return json.substr(valueStart, valueEnd - valueStart);
+}
 
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
     std::string response;
-    std::string targetPath = "upload/uploaded_file.txt"; // Chemin de sauvegarde du fichier
 
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
     if (it == this->_headers.end())
-        return (findErrorPage(config, 411));
+        return findErrorPage(config, 411);
 
     int contentLength;
     std::istringstream lengthStream(it->second);
     lengthStream >> contentLength;
 
     if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
-        return (findErrorPage(config, 400));
+        return findErrorPage(config, 400);
+
+    std::string fileName = extractJsonValue(this->_body, "fileName");
+    std::string fileContent = extractJsonValue(this->_body, "fileContent");
+
+    if (fileName.empty() || fileContent.empty())
+        return findErrorPage(config, 400);
+
+    std::string targetPath = "upload/" + fileName;
 
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
-        return (findErrorPage(config, 500));
+        return findErrorPage(config, 500);
 
-    // Écrire les données dans le fichier
-    outFile.write(this->_body.c_str(), contentLength);
+    outFile.write(fileContent.c_str(), fileContent.size());
     outFile.close();
 
-    // Construire la réponse HTTP de succès
-    response = "\nHTTP/1.1 201 Created\r\n";
+    std::ostringstream oss;
+
+    response = "HTTP/1.1 201 Created\r\n";
+    oss << contentLength;
+    response += "Content-Length: " + oss.str() + "\r\n";
+    response += "Content-Type: text/plain\r\n";
     response += "\r\n";
 
     return response;

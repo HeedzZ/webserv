@@ -31,7 +31,9 @@ public:
 	std::string	handlePost(ServerConfig& config);
 	std::string handleDelete(ServerConfig& config);
 	std::string findErrorPage(ServerConfig& config, int errorCode);
+	std::string getMimeType(const std::string& filePath);
 	std::string getPath() const;
+	std::string getMethod() const;
 	std::string intToString(int value);
 };
 
