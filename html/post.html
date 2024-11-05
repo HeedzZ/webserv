@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de requête POST</title>
+</head>
+<body>
+    <h1>Tester la requête POST</h1>
+    <form id="postForm" action="http://localhost:8081/upload" method="POST">
+        <label for="message">Entrez votre message :</label><br>
+        <input type="text" id="message" name="message" value="Hello World"><br><br>
+        <input type="submit" value="Envoyer">
+    </form>
+
+    <h2>Résultat :</h2>
+    <pre id="result"></pre>
+</body>
+</html>

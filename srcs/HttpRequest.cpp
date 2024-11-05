@@ -3,25 +3,41 @@
 
 HttpRequest::HttpRequest(const std::string rawRequest)
 {
-    std::string	line;
-	std::istringstream requestStream(rawRequest);
+    std::istringstream requestStream(rawRequest);
+    std::string line;
 
-	std::getline(requestStream, line);
-	std::istringstream lineStream(line);
-	lineStream >> _method >> _path >> _httpVersion;
+    if (std::getline(requestStream, line))
+    {
+        std::istringstream lineStream(line);
+        lineStream >> _method >> _path >> _httpVersion;
+    }
 
-	while (std::getline(requestStream, line) && line != "\r")
-	{
-		std::size_t delimiter = line.find(":");
-		if (delimiter != std::string::npos)
-		{
+    while (std::getline(requestStream, line) && line != "\r")
+    {
+        std::size_t delimiter = line.find(":");
+        if (delimiter != std::string::npos)
+        {
             std::string headerName = line.substr(0, delimiter);
-            std::string headerValue = line.substr(delimiter + 2);  // Skip ": "
+            std::string headerValue = line.substr(delimiter + 2);
             _headers[headerName] = headerValue;
         }
-	}
-	if (_method == "POST")
-        std::getline(requestStream, _body, '\0');
+    }
+
+    if (_method == "POST")
+    {
+        std::map<std::string, std::string>::const_iterator it = _headers.find("Content-Length");
+        if (it != _headers.end())
+        {
+            int contentLength = std::atoi(it->second.c_str());
+            if (contentLength > 0)
+            {
+                std::vector<char> buffer(contentLength);
+                requestStream.read(&buffer[0], contentLength);
+                _body.assign(buffer.begin(), buffer.end());
+            }
+        }
+        std::cout << "set Body = " << _body << std::endl;
+    }
 }
 
 std::string HttpRequest::handleRequest(ServerConfig& config)
@@ -29,15 +45,13 @@ std::string HttpRequest::handleRequest(ServerConfig& config)
 	if (this->_method.compare("GET") == 0)
 		return handleGet(config);
 	else if (this->_method.compare("POST") == 0)
-		return handlePost(config);
+		return handlePost();
 	else if (this->_method.compare("DELETE") == 0)
 		return handleDelete();
 	else
 		return ("HTTP/1.1 404 Not Found\r\n\r\n");
 	
 }
-
-
 
 std::string HttpRequest::handleGet(ServerConfig& config)
 {
@@ -90,12 +104,11 @@ std::string HttpRequest::handleGet(ServerConfig& config)
 
 
 
-std::string HttpRequest::handlePost(ServerConfig& config)
+std::string HttpRequest::handlePost()
 {
     std::string response;
-    std::string targetPath = config.getRoot() + "/uploaded_file.txt"; // Chemin de sauvegarde du fichier
+    std::string targetPath = "upload/uploaded_file.txt"; // Chemin de sauvegarde du fichier
 
-    std::cout << "body : " << this->_body << std::endl;
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
     if (it == this->_headers.end())
         return "HTTP/1.1 411 Length Required\r\n\r\n";
@@ -116,8 +129,7 @@ std::string HttpRequest::handlePost(ServerConfig& config)
     outFile.close();
 
     // Construire la réponse HTTP de succès
-    response = "HTTP/1.1 201 Created\r\n";
-    response += "Content-Length: 0\r\n";
+    response = "\nHTTP/1.1 201 Created\r\n";
     response += "\r\n";
 
     return response;

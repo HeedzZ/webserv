@@ -28,7 +28,7 @@ public:
 	~HttpRequest();
 	std::string handleRequest(ServerConfig& config);
 	std::string handleGet(ServerConfig& config);
-	std::string	handlePost(ServerConfig& config);
+	std::string	handlePost();
 	std::string handleDelete();
 	std::string getPath() const;
 };
