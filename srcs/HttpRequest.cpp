@@ -71,7 +71,6 @@ std::string HttpRequest::handleGet(ServerConfig& config)
         if (this->_path == it->getPath()) {
             fullPath = it->getRoot() + it->getIndex();  // Use the root specified for this location
             locationFound = true;
-            std::cout << "LOCATION FOUND full path: " << fullPath << std::endl;
             break;
         }
     }

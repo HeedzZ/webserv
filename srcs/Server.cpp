@@ -141,25 +141,43 @@ void Server::handleClientRequest(int clientIndex)
 
 
 
-std::string Server::readClientRequest(int client_fd, int clientIndex)
-{
+std::string Server::readClientRequest(int client_fd, int clientIndex) {
     std::string buffer;
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    while (true)
-    {
-        bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-        if (bytes_read <= 0)
-        {
-            removeClient(clientIndex);
-            return "";
-        }
-
+    // Lire les données du client
+    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0) {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
-        if (buffer.find("\r\n\r\n") != std::string::npos)
-            break;
+        if (buffer.find("\r\n\r\n") != std::string::npos) break;
+    }
+
+    if (bytes_read <= 0) {
+        removeClient(clientIndex);
+        return "";
+    }
+
+    // Extraire Content-Length pour lire le corps
+    size_t contentLength = 0;
+    size_t headerEndPos = buffer.find("\r\n\r\n");
+    if (headerEndPos != std::string::npos) {
+        size_t contentLengthPos = buffer.find("Content-Length:");
+        if (contentLengthPos != std::string::npos) {
+            std::istringstream(buffer.substr(contentLengthPos + 15)) >> contentLength;
+        }
+
+        // Lire le reste du corps si nécessaire
+        size_t bodyStartPos = headerEndPos + 4;
+        while (buffer.size() - bodyStartPos < contentLength) {
+            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
+            if (bytes_read <= 0) {
+                removeClient(clientIndex);
+                return "";
+            }
+            tempBuffer[bytes_read] = '\0';
+            buffer += std::string(tempBuffer, bytes_read);
+        }
     }
 
     return buffer;
