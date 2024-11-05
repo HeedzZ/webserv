@@ -39,9 +39,12 @@ void ServerConfig::setErrorPage(int code, const std::string& path)
     error_pages[code] = path;
 }
 
-const std::map<int, std::string>& ServerConfig::getErrorPages() const
-{
-    return error_pages;
+std::string ServerConfig::getErrorPage(int errorCode) const {
+    std::map<int, std::string>::const_iterator it = error_pages.find(errorCode);
+    if (it != error_pages.end()) {
+        return it->second;  // Chemin de la page d'erreur définie
+    }
+    return "";  // Retourne une chaîne vide si aucune page n'est définie pour ce code d'erreur
 }
 
 void ServerConfig::addLocation(const ServerLocation& location)

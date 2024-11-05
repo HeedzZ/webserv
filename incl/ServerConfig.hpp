@@ -31,7 +31,7 @@ public:
     const std::string& getIndex() const;
 
     void setErrorPage(int code, const std::string& path);
-    const std::map<int, std::string>& getErrorPages() const;
+    std::string getErrorPage(int errorCode) const;
 
     void addLocation(const ServerLocation& location);
     const std::vector<ServerLocation>& getLocations() const;

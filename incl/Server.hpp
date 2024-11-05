@@ -41,6 +41,7 @@ public:
     std::string generateHttpResponse(const std::string& requestedPath);
     std::string extractRequestedPath(const std::string& buffer);
     std::string readClientRequest(int client_fd, int clientIndex);
+    std::string intToString(int value);
 
 
 
@@ -55,6 +56,7 @@ private:
     void removeClient(int index);    // Supprime un client du vecteur de poll
     std::string createHttpResponse(int statusCode, const std::string& contentType, const std::string& body); // Génère une réponse HTTP simple
     std::string getStatusMessage(int statusCode);
+
 };
 
 #endif // SERVER_HPP

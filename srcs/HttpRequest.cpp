@@ -1,5 +1,11 @@
 #include "HttpRequest.hpp"
 
+std::string HttpRequest::intToString(int value)
+{
+    std::ostringstream oss;
+    oss << value;
+    return oss.str();
+}
 
 HttpRequest::HttpRequest(const std::string rawRequest)
 {
@@ -45,11 +51,11 @@ std::string HttpRequest::handleRequest(ServerConfig& config)
 	if (this->_method.compare("GET") == 0)
 		return handleGet(config);
 	else if (this->_method.compare("POST") == 0)
-		return handlePost();
+		return handlePost(config);
 	else if (this->_method.compare("DELETE") == 0)
-		return handleDelete();
+		return handleDelete(config);
 	else
-		return ("HTTP/1.1 404 Not Found\r\n\r\n");
+		return (findErrorPage(config, 404));
 	
 }
 
@@ -74,7 +80,7 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     if (this->_path.compare("/") == 0)
         fullPath = config.getRoot() + config.getIndex();
     if (!locationFound && this->_path.compare("/") != 0) {
-        return "HTTP/1.1 404 Not Found\r\n\r\n";
+        return (findErrorPage(config, 404));
     }
 
     // Ouvrir et lire le fichier correspondant
@@ -97,32 +103,32 @@ std::string HttpRequest::handleGet(ServerConfig& config)
             }
         }
     } else {
-        response = "HTTP/1.1 404 Not Found\r\n\r\n";
+        return (findErrorPage(config, 404));
     }
     return response;
 }
 
 
 
-std::string HttpRequest::handlePost()
+std::string HttpRequest::handlePost(ServerConfig& config)
 {
     std::string response;
     std::string targetPath = "upload/uploaded_file.txt"; // Chemin de sauvegarde du fichier
 
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
     if (it == this->_headers.end())
-        return "HTTP/1.1 411 Length Required\r\n\r\n";
+        return (findErrorPage(config, 411));
 
     int contentLength;
     std::istringstream lengthStream(it->second);
     lengthStream >> contentLength;
 
     if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
-        return "HTTP/1.1 400 Bad Request\r\n\r\n";
+        return (findErrorPage(config, 400));
 
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
-        return "HTTP/1.1 500 Internal Server Error\r\n\r\n";
+        return (findErrorPage(config, 500));
 
     // Écrire les données dans le fichier
     outFile.write(this->_body.c_str(), contentLength);
@@ -137,7 +143,7 @@ std::string HttpRequest::handlePost()
 
 
 
-std::string HttpRequest::handleDelete()
+std::string HttpRequest::handleDelete(ServerConfig& config)
 {
     std::string response;
     
@@ -150,13 +156,41 @@ std::string HttpRequest::handleDelete()
         response += "File deleted successfully.";
     }
 	else
-        response = "HTTP/1.1 404 Not Found\r\n\r\n";
+        return (findErrorPage(config, 404));
     return response;
 }
 
-std::string HttpRequest::getPath() const {
-    return _path;
+#include <sstream>  // Pour std::ostringstream en C++98
+
+std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode) {
+    // Obtenir le chemin de la page d'erreur depuis l'objet config
+    std::string errorPagePath = config.getErrorPage(errorCode);
+    std::string fullPath = config.getRoot() + errorPagePath;
+
+    std::ifstream errorFile(fullPath.c_str());
+    std::string content;
+    if (errorFile) {
+        // Lire tout le contenu du fichier
+        std::string line;
+        while (std::getline(errorFile, line)) {
+            content += line + "\n";
+        }
+    } else {
+        // Si le fichier ne peut pas être ouvert, créer une page d'erreur générique
+        content = "<html><body><h1>Error " + intToString(errorCode) + "</h1><p>Page not found.</p></body></html>";
+    }
+
+    // Construire le début de la réponse HTTP
+    std::ostringstream response;
+    response << "HTTP/1.1 " << errorCode << " Error\r\n";
+    response << "Content-Type: text/html\r\n";
+    response << "Content-Length: " << content.size() << "\r\n";
+    response << "\r\n";  // Séparation entre les en-têtes et le corps de la réponse
+    response << content;  // Ajouter le contenu de la page d'erreur
+
+    return response.str();
 }
+
 
 HttpRequest::~HttpRequest()
 {

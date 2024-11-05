@@ -15,7 +15,7 @@
 #include "ServerConfig.hpp"
 
 
-std::string intToString(int value)
+std::string Server::intToString(int value)
 {
     std::ostringstream oss;
     oss << value;

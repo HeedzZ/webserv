@@ -28,9 +28,11 @@ public:
 	~HttpRequest();
 	std::string handleRequest(ServerConfig& config);
 	std::string handleGet(ServerConfig& config);
-	std::string	handlePost();
-	std::string handleDelete();
+	std::string	handlePost(ServerConfig& config);
+	std::string handleDelete(ServerConfig& config);
+	std::string findErrorPage(ServerConfig& config, int errorCode);
 	std::string getPath() const;
+	std::string intToString(int value);
 };
 
 #endif
