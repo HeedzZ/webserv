@@ -144,57 +144,32 @@ std::string HttpRequest::getMimeType(const std::string& filePath) {
 }
 
 
-std::string extractJsonValue(const std::string& json, const std::string& key)
-{
-    std::string keyPattern = "\"" + key + "\":\"";
-    size_t keyPos = json.find(keyPattern);
-    if (keyPos == std::string::npos)
-        return "";
-
-    size_t valueStart = keyPos + keyPattern.length();
-    size_t valueEnd = json.find("\"", valueStart);
-    if (valueEnd == std::string::npos)
-        return "";
-
-    return json.substr(valueStart, valueEnd - valueStart);
-}
-
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
     std::string response;
+    std::string targetPath = "upload/uploaded_file.txt"; // Chemin de sauvegarde du fichier
 
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
     if (it == this->_headers.end())
-        return findErrorPage(config, 411);
+        return (findErrorPage(config, 411));
 
     int contentLength;
     std::istringstream lengthStream(it->second);
     lengthStream >> contentLength;
 
     if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
-        return findErrorPage(config, 400);
-
-    std::string fileName = extractJsonValue(this->_body, "fileName");
-    std::string fileContent = extractJsonValue(this->_body, "fileContent");
-
-    if (fileName.empty() || fileContent.empty())
-        return findErrorPage(config, 400);
-
-    std::string targetPath = "upload/" + fileName;
+        return (findErrorPage(config, 400));
 
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
-        return findErrorPage(config, 500);
+        return (findErrorPage(config, 500));
 
-    outFile.write(fileContent.c_str(), fileContent.size());
+    // Écrire les données dans le fichier
+    outFile.write(this->_body.c_str(), contentLength);
     outFile.close();
 
-    std::ostringstream oss;
-
-    response = "HTTP/1.1 201 Created\r\n";
-    oss << contentLength;
-    response += "Content-Length: " + oss.str() + "\r\n";
-    response += "Content-Type: text/plain\r\n";
+    // Construire la réponse HTTP de succès
+    response = "\nHTTP/1.1 201 Created\r\n";
     response += "\r\n";
 
     return response;
