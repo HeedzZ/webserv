@@ -42,7 +42,6 @@ HttpRequest::HttpRequest(const std::string rawRequest)
                 _body.assign(buffer.begin(), buffer.end());
             }
         }
-        std::cout << "set Body = " << _body << std::endl;
     }
 }
 
@@ -101,40 +100,63 @@ std::string HttpRequest::handleGet(ServerConfig& config)
                 response += fileContent;
             }
         }
-    } else {
-        return (findErrorPage(config, 404));
     }
+    else
+        return (findErrorPage(config, 404));
     return response;
 }
 
+std::string extractJsonValue(const std::string& json, const std::string& key)
+{
+    std::string keyPattern = "\"" + key + "\":\"";
+    size_t keyPos = json.find(keyPattern);
+    if (keyPos == std::string::npos)
+        return "";
 
+    size_t valueStart = keyPos + keyPattern.length();
+    size_t valueEnd = json.find("\"", valueStart);
+    if (valueEnd == std::string::npos)
+        return "";
+
+    return json.substr(valueStart, valueEnd - valueStart);
+}
 
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
     std::string response;
-    std::string targetPath = "upload/uploaded_file.txt"; // Chemin de sauvegarde du fichier
 
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
     if (it == this->_headers.end())
-        return (findErrorPage(config, 411));
+        return findErrorPage(config, 411);
 
     int contentLength;
     std::istringstream lengthStream(it->second);
     lengthStream >> contentLength;
 
     if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
-        return (findErrorPage(config, 400));
+        return findErrorPage(config, 400);
+
+    std::string fileName = extractJsonValue(this->_body, "fileName");
+    std::string fileContent = extractJsonValue(this->_body, "fileContent");
+
+    if (fileName.empty() || fileContent.empty())
+        return findErrorPage(config, 400);
+
+    std::string targetPath = "upload/" + fileName;
 
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
-        return (findErrorPage(config, 500));
+        return findErrorPage(config, 500);
 
-    // Écrire les données dans le fichier
-    outFile.write(this->_body.c_str(), contentLength);
+    outFile.write(fileContent.c_str(), fileContent.size());
     outFile.close();
 
-    // Construire la réponse HTTP de succès
-    response = "\nHTTP/1.1 201 Created\r\n";
+    std::ostringstream oss;
+
+    response = "HTTP/1.1 201 Created\r\n";
+    oss << contentLength;
+    response += "Content-Length: " + oss.str() + "\r\n";
+    response += "Content-Type: text/plain\r\n";
     response += "\r\n";
 
     return response;
@@ -161,20 +183,25 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
 
 #include <sstream>  // Pour std::ostringstream en C++98
 
-std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode) {
+std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
+{
     // Obtenir le chemin de la page d'erreur depuis l'objet config
     std::string errorPagePath = config.getErrorPage(errorCode);
     std::string fullPath = config.getRoot() + errorPagePath;
 
     std::ifstream errorFile(fullPath.c_str());
     std::string content;
-    if (errorFile) {
+    if (errorFile)
+    {
         // Lire tout le contenu du fichier
         std::string line;
-        while (std::getline(errorFile, line)) {
+        while (std::getline(errorFile, line))
+        {
             content += line + "\n";
         }
-    } else {
+    }
+    else
+    {
         // Si le fichier ne peut pas être ouvert, créer une page d'erreur générique
         content = "<html><body><h1>Error " + intToString(errorCode) + "</h1><p>Page not found.</p></body></html>";
     }
