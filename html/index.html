@@ -109,6 +109,27 @@
         .container {
             animation: glow 4s infinite;
         }
+
+        /* Style pour les boutons */
+        .btn {
+            display: inline-block;
+            margin-top: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1em;
+            color: #fff;
+            text-decoration: none;
+            background-color: #005f99;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 150, 255, 0.5);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background-color: #007acc;
+            box-shadow: 0 6px 15px rgba(0, 200, 255, 0.6);
+        }
+
     </style>
 </head>
 <body>
@@ -128,6 +149,10 @@
                 <li>Réponses HTTP personnalisées avec du contenu dynamique</li>
                 <li>Pages d'erreur customisées</li>
             </ul>
+            
+            <!-- Boutons pour naviguer vers /post et /intra -->
+            <a href="/post" class="btn">Accéder à /post</a>
+            <a href="/yann" class="btn">Accéder à /yann</a>
         </section>
 
         <footer>

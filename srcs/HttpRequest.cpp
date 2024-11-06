@@ -237,7 +237,6 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
 {
     std::string response;
     
-    // Supprimer le fichier
     if (std::remove(("." + this->_path).c_str()) == 0)
 	{
         response = "HTTP/1.1 200 OK\r\n";
