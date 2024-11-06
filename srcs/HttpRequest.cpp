@@ -64,12 +64,13 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     std::string response;
     std::string fullPath;
 
-    // Vérifier si le chemin de la requête correspond à une location définie
     bool locationFound = false;
     const std::vector<ServerLocation>& locations = config.getLocations();
-    for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it) {
-        if (this->_path == it->getPath()) {
-            fullPath = it->getRoot() + it->getIndex();  // Utiliser le root spécifié pour cette location
+    for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
+    {
+        if (this->_path == it->getPath())
+        {
+            fullPath = it->getRoot() + it->getIndex();
             locationFound = true;
             break;
         }
@@ -77,29 +78,27 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     if (locationFound == false)
         fullPath = config.getRoot() + _path;
 
-    // Si aucune location correspondante n'a été trouvée, utiliser la configuration par défaut
-    if (!locationFound) {
-        if (this->_path == "/") {
-            fullPath = config.getRoot() + config.getIndex();  // Page index par défaut
-        }
+    if (!locationFound)
+    {
+        if (this->_path == "/")
+            fullPath = config.getRoot() + config.getIndex();
     }
 
-    // Ouvrir et lire le fichier correspondant
     std::ifstream file(fullPath.c_str(), std::ios::binary);
-    if (file.is_open()) {
+    if (file.is_open())
+    {
         file.seekg(0, std::ios::end);
         std::streamsize size = file.tellg();
         file.seekg(0, std::ios::beg);
 
-        if (size > 0 && size < std::numeric_limits<std::streamsize>::max()) {
+        if (size > 0 && size < std::numeric_limits<std::streamsize>::max())
+        {
             std::vector<char> buffer(static_cast<size_t>(size));
-            if (file.read(buffer.data(), size)) {
+            if (file.read(buffer.data(), size))
+            {
                 std::string fileContent(buffer.data(), size);
-                
-                // Déterminer le type MIME en utilisant le chemin complet
                 std::string contentType = getMimeType(fullPath);
 
-                // Construire la réponse HTTP
                 std::ostringstream oss;
                 oss << fileContent.size();
                 response = "HTTP/1.1 200 OK\r\n";
@@ -109,9 +108,9 @@ std::string HttpRequest::handleGet(ServerConfig& config)
                 response += fileContent;
             }
         }
-    } else {
-        return findErrorPage(config, 404);  // Page d'erreur 404 si le fichier ne peut pas être ouvert
     }
+    else
+        return findErrorPage(config, 404);
     return response;
 }
 
@@ -157,29 +156,14 @@ std::string extractJsonValue(const std::string& json, const std::string& key)
 
     return json.substr(valueStart, valueEnd - valueStart);
 }
-
-std::string HttpRequest::handlePost(ServerConfig& config)
+std::string HttpRequest::uploadTxt(ServerConfig& config, std::string response)
 {
-    std::string response;
-
-    std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
-    if (it == this->_headers.end())
-        return findErrorPage(config, 411); 
-
-    int contentLength;
-    std::istringstream lengthStream(it->second);
-    lengthStream >> contentLength;
-
-    if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
-        return findErrorPage(config, 400);
-
     std::string fileName = extractJsonValue(this->_body, "fileName");
     std::string fileContent = extractJsonValue(this->_body, "fileContent");
 
     if (fileName.empty() || fileContent.empty())
         return findErrorPage(config, 400);
     std::string targetPath = "upload/" + fileName;
-
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
@@ -190,8 +174,61 @@ std::string HttpRequest::handlePost(ServerConfig& config)
     response += "Content-Length: 0\r\n";
     response += "Content-Type: text/plain\r\n";
     response += "\r\n";
-
     return response;
+}
+
+std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, std::string contentType)
+{
+    std::string boundary = "--" + contentType.substr(contentType.find("boundary=") + 9);
+    size_t fileStartPos = _body.find("filename=\"");
+    if (fileStartPos == std::string::npos)
+        return findErrorPage(config, 400);
+
+    fileStartPos += 10;
+    size_t fileNameEndPos = _body.find("\"", fileStartPos);
+    std::string fileName = _body.substr(fileStartPos, fileNameEndPos - fileStartPos);
+    size_t contentStart = _body.find("\r\n\r\n", fileNameEndPos) + 4;
+    size_t contentEnd = _body.find(boundary, contentStart) - 2;
+    std::string fileContent = _body.substr(contentStart, contentEnd - contentStart);
+    std::string targetPath = "upload/" + fileName;
+    std::ofstream outFile(targetPath.c_str(), std::ios::binary);
+    if (!outFile.is_open())
+        return findErrorPage(config, 500);
+    outFile.write(fileContent.c_str(), fileContent.size() - 46);
+    outFile.close();
+
+    response = "HTTP/1.1 201 Created\r\n";
+    response += "Content-Length: 0\r\n";
+    response += "Content-Type: text/plain\r\n";
+    response += "\r\n";
+    return response;
+}
+
+std::string HttpRequest::handlePost(ServerConfig& config)
+{
+     std::string response;
+    
+    std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
+    if (it == this->_headers.end())
+        return findErrorPage(config, 411);
+
+    int contentLength;
+    std::istringstream lengthStream(it->second);
+    lengthStream >> contentLength;
+
+    if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
+        return findErrorPage(config, 400);
+
+    std::map<std::string, std::string>::const_iterator contentTypeHeader = _headers.find("Content-Type");
+    if (contentTypeHeader == _headers.end())
+        return findErrorPage(config, 400);
+
+    std::string contentType = contentTypeHeader->second;
+    if (contentType.find("application/json") != std::string::npos) // if POST txt
+        return (uploadTxt(config,  response));
+    else if (contentType.find("multipart/form-data") != std::string::npos) //if POST file
+        return (uploadFile(config, response, contentType));
+    return findErrorPage(config, 415);
 }
 
 
@@ -213,31 +250,28 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
     return response;
 }
 
-std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode) {
-    // Obtenir le chemin de la page d'erreur depuis l'objet config
+std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
+{
     std::string errorPagePath = config.getErrorPage(errorCode);
     std::string fullPath = config.getRoot() + errorPagePath;
 
     std::ifstream errorFile(fullPath.c_str());
     std::string content;
-    if (errorFile) {
-        // Lire tout le contenu du fichier
+    if (errorFile)
+    {
         std::string line;
-        while (std::getline(errorFile, line)) {
+        while (std::getline(errorFile, line))
             content += line + "\n";
-        }
-    } else {
-        // Si le fichier ne peut pas être ouvert, créer une page d'erreur générique
-        content = "<html><body><h1>Error " + intToString(errorCode) + "</h1><p>Page not found.</p></body></html>";
     }
-
-    // Construire le début de la réponse HTTP
+    else
+        content = "<html><body><h1>Error " + intToString(errorCode) + "</h1><p>Page not found.</p></body></html>";
     std::ostringstream response;
+
     response << "HTTP/1.1 " << errorCode << " Error\r\n";
     response << "Content-Type: text/html\r\n";
     response << "Content-Length: " << content.size() << "\r\n";
-    response << "\r\n";  // Séparation entre les en-têtes et le corps de la réponse
-    response << content;  // Ajouter le contenu de la page d'erreur
+    response << "\r\n";
+    response << content;
 
     return response.str();
 }

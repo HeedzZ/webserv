@@ -29,6 +29,8 @@ public:
 	std::string handleRequest(ServerConfig& config);
 	std::string handleGet(ServerConfig& config);
 	std::string	handlePost(ServerConfig& config);
+	std::string uploadTxt(ServerConfig& config, std::string response);
+	std::string uploadFile(ServerConfig& config, std::string response, std::string contentType);
 	std::string handleDelete(ServerConfig& config);
 	std::string findErrorPage(ServerConfig& config, int errorCode);
 	std::string getMimeType(const std::string& filePath);
