@@ -136,7 +136,7 @@ void Server::handleClientRequest(int clientIndex)
     HttpRequest request(buffer);
 
     std::string response = request.handleRequest(_config);
-    //std::cout << "\033[34m\n" << response << "\n\033[0m" << std::endl;
+    std::cout << "\033[34m\n" << response << "\n\033[0m" << std::endl;
     send(client_fd, response.c_str(), response.size(), 0);
 }
 

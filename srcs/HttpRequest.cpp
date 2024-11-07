@@ -84,6 +84,10 @@ std::string HttpRequest::handleGet(ServerConfig& config)
             fullPath = config.getRoot() + config.getIndex();
     }
 
+    if (fullPath.find(".php") != std::string::npos) {
+        return executeCGI(fullPath, config);
+    }
+
     std::ifstream file(fullPath.c_str(), std::ios::binary);
     if (file.is_open())
     {
@@ -118,6 +122,7 @@ std::string HttpRequest::handleGet(ServerConfig& config)
 std::string HttpRequest::getMimeType(const std::string& filePath) {
     // Tableau associatif pour les types MIME les plus courants
     std::map<std::string, std::string> mimeTypes;
+    mimeTypes[".php"] = "text/html";
     mimeTypes[".html"] = "text/html";
     mimeTypes[".css"] = "text/css";
     mimeTypes[".js"] = "application/javascript";
@@ -141,6 +146,95 @@ std::string HttpRequest::getMimeType(const std::string& filePath) {
 
     return "application/octet-stream"; // Type MIME par défaut
 }
+
+std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig& config) {
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        return "500 Internal Server Error: Pipe creation failed";
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Processus enfant
+        close(pipefd[0]); // Ferme la lecture
+        dup2(pipefd[1], STDOUT_FILENO); // Redirige la sortie standard vers le pipe
+        close(pipefd[1]);
+
+        if (_method == "POST") {
+            // Rediriger l'entrée standard pour les requêtes POST
+            int input_fd[2];
+            if (pipe(input_fd) == -1) {
+                exit(1); // Échec de la création du pipe
+            }
+
+            pid_t input_pid = fork();
+            if (input_pid == 0) {
+                // Processus enfant : écrire le corps de la requête
+                close(input_fd[0]);
+                write(input_fd[1], _body.c_str(), _body.size());
+                close(input_fd[1]);
+                exit(0);
+            } else {
+                close(input_fd[1]);
+                dup2(input_fd[0], STDIN_FILENO);
+                close(input_fd[0]);
+            }
+        }
+
+        // Configuration des arguments et de l'environnement pour execve
+        char *args[] = {
+            const_cast<char*>("/usr/bin/php"),
+            const_cast<char*>(scriptPath.c_str()),
+            NULL
+        };
+
+        // Configuration des variables d'environnement
+        std::vector<std::string> envVars;
+        envVars.push_back("REQUEST_METHOD=POST");
+        envVars.push_back("SCRIPT_FILENAME=" + scriptPath);
+        envVars.push_back("CONTENT_LENGTH=" + intToString(_body.size()));
+        envVars.push_back("CONTENT_TYPE=" + _headers["Content-Type"]);
+
+        std::vector<char*> env;
+        for (size_t i = 0; i < envVars.size(); ++i) {
+            env.push_back(const_cast<char*>(envVars[i].c_str()));
+        }
+        env.push_back(NULL);
+
+        execve("/usr/bin/php", args, env.data());
+        std::cerr << "Erreur d'exécution du script CGI." << std::endl;
+        exit(1);
+    } else if (pid > 0) {
+        // Processus parent
+        close(pipefd[1]); // Ferme l'écriture
+
+        std::string output;
+        char buffer[1024];
+        ssize_t bytesRead;
+        while ((bytesRead = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
+            buffer[bytesRead] = '\0';
+            output += buffer;
+        }
+
+        close(pipefd[0]);
+        int status;
+        waitpid(pid, &status, 0);
+
+        std::ostringstream oss;
+        oss << output.size();
+        std::string response = "HTTP/1.1 200 OK\r\n";
+        response += "Content-Length: " + oss.str() + "\r\n";
+        response += "Content-Type: text/html\r\n"; // Modifier si nécessaire
+        response += "\r\n";
+        response += output;
+        return response;
+    } else {
+        return findErrorPage(config, 500);
+    }
+}
+
+
+
 
 std::string extractJsonValue(const std::string& json, const std::string& key)
 {
@@ -204,31 +298,30 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     return response;
 }
 
-std::string HttpRequest::handlePost(ServerConfig& config)
-{
-     std::string response;
-    
+std::string HttpRequest::handlePost(ServerConfig& config) {
+    // Vérification du Content-Length
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
-    if (it == this->_headers.end())
+    if (it == this->_headers.end()) {
         return findErrorPage(config, 411);
+    }
 
     int contentLength;
     std::istringstream lengthStream(it->second);
     lengthStream >> contentLength;
 
-    if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
+    if (this->_body.size() != static_cast<std::string::size_type>(contentLength)) {
         return findErrorPage(config, 400);
+    }
 
-    std::map<std::string, std::string>::const_iterator contentTypeHeader = _headers.find("Content-Type");
-    if (contentTypeHeader == _headers.end())
-        return findErrorPage(config, 400);
+    // Transmettre la requête au script CGI
+    std::string scriptPath = config.getRoot() + this->_path; // Modifier si nécessaire
 
-    std::string contentType = contentTypeHeader->second;
-    if (contentType.find("application/json") != std::string::npos) // if POST txt
-        return (uploadTxt(config,  response));
-    else if (contentType.find("multipart/form-data") != std::string::npos) //if POST file
-        return (uploadFile(config, response, contentType));
-    return findErrorPage(config, 415);
+    if (scriptPath.find(".php") != std::string::npos) {
+        // Exécuter le script PHP et renvoyer la réponse
+        return executeCGI(scriptPath, config);
+    }
+
+    return findErrorPage(config, 415); // Unsupported Media Type si le type n'est pas géré
 }
 
 
