@@ -236,16 +236,40 @@ std::string HttpRequest::handlePost(ServerConfig& config)
 std::string HttpRequest::handleDelete(ServerConfig& config)
 {
     std::string response;
-    
-    if (std::remove(("." + this->_path).c_str()) == 0)
-	{
-        response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "\r\n";
-        response += "File deleted successfully.";
+
+    // Étape 1 : Vérification de l'existence de la ressource et de l'accès
+    std::string resourcePath = "upload/" + _body;  // Concaténer le chemin d'upload avec la ressource spécifiée
+
+    // Vérifier si le fichier existe
+    struct stat fileStat;
+    if (stat(resourcePath.c_str(), &fileStat) != 0) {
+        return findErrorPage(config, 404);  // 404 Not Found si le fichier n'existe pas
     }
-	else
-        return (findErrorPage(config, 404));
+
+    // Vérifier les permissions (lecture/écriture) sur le fichier
+    if (access(resourcePath.c_str(), W_OK) != 0) {
+        return findErrorPage(config, 403);  // 403 Forbidden si les permissions ne permettent pas la suppression
+    }
+
+    // Étape 2 : Vérification des méthodes autorisées pour la route
+    std::map<std::string, std::string>::const_iterator methodIt = _headers.find("Allow");
+    if (methodIt != _headers.end() && methodIt->second.find("DELETE") == std::string::npos) {
+        response = "HTTP/1.1 405 Method Not Allowed\r\n";
+        response += "Allow: " + methodIt->second + "\r\n";
+        response += "\r\n";
+        return response;
+    }
+
+    // Étape 3 : Tentative de suppression de la ressource
+    if (unlink(resourcePath.c_str()) != 0) {
+        return findErrorPage(config, 500);  // 500 Internal Server Error en cas d'échec de la suppression
+    }
+
+    // Étape 4 : Réponse de succès 204 No Content
+    response = "HTTP/1.1 204 No Content\r\n";
+    response += "Content-Length: 0\r\n";
+    response += "\r\n";
+
     return response;
 }
 

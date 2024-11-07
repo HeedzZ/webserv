@@ -12,6 +12,7 @@
 #include <vector>
 #include <limits>
 #include "ServerConfig.hpp"
+#include <sys/stat.h>
 #include "ServerLocation.hpp"
 
 class HttpRequest
