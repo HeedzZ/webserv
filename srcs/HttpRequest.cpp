@@ -298,31 +298,33 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     return response;
 }
 
-std::string HttpRequest::handlePost(ServerConfig& config) {
-    // Vérification du Content-Length
+std::string HttpRequest::handlePost(ServerConfig& config)
+{
+     std::string response;
+    
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
-    if (it == this->_headers.end()) {
+    if (it == this->_headers.end())
         return findErrorPage(config, 411);
-    }
 
     int contentLength;
     std::istringstream lengthStream(it->second);
     lengthStream >> contentLength;
 
-    if (this->_body.size() != static_cast<std::string::size_type>(contentLength)) {
+    if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
         return findErrorPage(config, 400);
-    }
 
-    // Transmettre la requête au script CGI
-    std::string scriptPath = config.getRoot() + this->_path; // Modifier si nécessaire
+    std::map<std::string, std::string>::const_iterator contentTypeHeader = _headers.find("Content-Type");
+    if (contentTypeHeader == _headers.end())
+        return findErrorPage(config, 400);
 
-    if (scriptPath.find(".php") != std::string::npos) {
-        // Exécuter le script PHP et renvoyer la réponse
-        return executeCGI(scriptPath, config);
-    }
-
-    return findErrorPage(config, 415); // Unsupported Media Type si le type n'est pas géré
+    std::string contentType = contentTypeHeader->second;
+    if (contentType.find("application/json") != std::string::npos) // if POST txt
+        return (uploadTxt(config,  response));
+    else if (contentType.find("multipart/form-data") != std::string::npos) //if POST file
+        return (uploadFile(config, response, contentType));
+    return findErrorPage(config, 415);
 }
+
 
 
 
@@ -331,22 +333,21 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
     std::string response;
 
     // Étape 1 : Vérification de l'existence de la ressource et de l'accès
-    std::string resourcePath = "upload/" + _body;  // Concaténer le chemin d'upload avec la ressource spécifiée
-
+    std::string resourcePath =  _path;  // Concaténer le chemin d'upload avec la ressource spécifiée
+    std::cout << "resourcePath ::::::::::: " << resourcePath << std::endl;
     // Vérifier si le fichier existe
     struct stat fileStat;
-    if (stat(resourcePath.c_str(), &fileStat) != 0) {
+    if (stat(resourcePath.c_str(), &fileStat) != 0)
         return findErrorPage(config, 404);  // 404 Not Found si le fichier n'existe pas
-    }
 
     // Vérifier les permissions (lecture/écriture) sur le fichier
-    if (access(resourcePath.c_str(), W_OK) != 0) {
+    if (access(resourcePath.c_str(), W_OK) != 0)
         return findErrorPage(config, 403);  // 403 Forbidden si les permissions ne permettent pas la suppression
-    }
 
     // Étape 2 : Vérification des méthodes autorisées pour la route
     std::map<std::string, std::string>::const_iterator methodIt = _headers.find("Allow");
-    if (methodIt != _headers.end() && methodIt->second.find("DELETE") == std::string::npos) {
+    if (methodIt != _headers.end() && methodIt->second.find("DELETE") == std::string::npos)
+    {
         response = "HTTP/1.1 405 Method Not Allowed\r\n";
         response += "Allow: " + methodIt->second + "\r\n";
         response += "\r\n";
@@ -354,9 +355,8 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
     }
 
     // Étape 3 : Tentative de suppression de la ressource
-    if (unlink(resourcePath.c_str()) != 0) {
+    if (unlink(resourcePath.c_str()) != 0)
         return findErrorPage(config, 500);  // 500 Internal Server Error en cas d'échec de la suppression
-    }
 
     // Étape 4 : Réponse de succès 204 No Content
     response = "HTTP/1.1 204 No Content\r\n";
