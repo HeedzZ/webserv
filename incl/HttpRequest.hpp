@@ -11,6 +11,8 @@
 #include <string.h>
 #include <vector>
 #include <limits>
+#include <unistd.h>
+#include <sys/wait.h>
 #include "ServerConfig.hpp"
 #include "ServerLocation.hpp"
 
@@ -37,6 +39,7 @@ public:
 	std::string getPath() const;
 	std::string getMethod() const;
 	std::string intToString(int value);
+	std::string executeCGI(const std::string& scriptPath, ServerConfig& config);
 };
 
 #endif
