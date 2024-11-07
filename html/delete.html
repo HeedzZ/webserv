@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galactic File Deletion</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(45deg, #0b0b2b, #1a1a4a);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        .stars {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .stars::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(2px 2px at 20px 30px, #fff, rgba(0,0,0,0)),
+                            radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
+                            radial-gradient(2px 2px at 50px 160px, #fff, rgba(0,0,0,0)),
+                            radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
+                            radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0));
+            background-repeat: repeat;
+            background-size: 200px 200px;
+            animation: twinkle 1s infinite;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+
+        .file-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(82, 156, 255, 0.3);
+            text-align: center;
+            position: relative;
+            width: 300px;
+        }
+
+        .file-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            color: #5291ff;
+            transition: transform 0.3s ease;
+        }
+
+        .delete-btn {
+            background: #ff3366;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            color: white;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+
+        .delete-btn:hover {
+            background: #ff1a1a;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.5);
+        }
+
+        .file-name {
+            font-size: 1.2rem;
+            margin: 1rem 0;
+            color: #fff;
+        }
+
+        .delete-animation {
+            animation: deleteFile 1s forwards;
+        }
+
+        @keyframes deleteFile {
+            0% {
+                transform: scale(1) rotate(0);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(0.8) rotate(180deg);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(0) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .success-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: #4CAF50;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .show-message {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+    <div class="file-container" id="fileContainer">
+        <div class="file-icon">📁</div>
+        <div class="file-name">Galactic_Data.txt</div>
+        <button class="delete-btn" onclick="deleteFile()">Delete File</button>
+    </div>
+
+    <script>
+        function deleteFile() {
+            const container = document.getElementById('fileContainer');
+            container.classList.add('delete-animation');
+            
+            setTimeout(() => {
+                container.innerHTML = `
+                    <div class="success-message show-message">
+                        File successfully deleted from the galaxy!
+                    </div>`;
+                container.style.background = 'transparent';
+                container.style.boxShadow = 'none';
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
