@@ -181,27 +181,28 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
             }
         }
 
-        // Configuration des arguments et de l'environnement pour execve
-        char *args[] = {
-            const_cast<char*>("/usr/bin/php"),
-            const_cast<char*>(scriptPath.c_str()),
-            NULL
-        };
-
-        // Configuration des variables d'environnement
+        // Préparer les variables d'environnement
         std::vector<std::string> envVars;
-        envVars.push_back("REQUEST_METHOD=POST");
+        envVars.push_back("REQUEST_METHOD=" + _method);
         envVars.push_back("SCRIPT_FILENAME=" + scriptPath);
         envVars.push_back("CONTENT_LENGTH=" + intToString(_body.size()));
         envVars.push_back("CONTENT_TYPE=" + _headers["Content-Type"]);
 
+        // Convertir envVars en tableau de char* pour execve
         std::vector<char*> env;
         for (size_t i = 0; i < envVars.size(); ++i) {
             env.push_back(const_cast<char*>(envVars[i].c_str()));
         }
         env.push_back(NULL);
 
-        execve("/usr/bin/php", args, env.data());
+        // Arguments pour execve
+        char *args[] = {
+            const_cast<char*>("/usr/bin/php"),
+            const_cast<char*>(scriptPath.c_str()),
+            NULL
+        };
+
+        execve("/usr/bin/php", args, &env[0]);
         std::cerr << "Erreur d'exécution du script CGI." << std::endl;
         exit(1);
     } else if (pid > 0) {
@@ -232,6 +233,7 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         return findErrorPage(config, 500);
     }
 }
+
 
 
 
@@ -316,12 +318,16 @@ std::string HttpRequest::handlePost(ServerConfig& config)
     std::map<std::string, std::string>::const_iterator contentTypeHeader = _headers.find("Content-Type");
     if (contentTypeHeader == _headers.end())
         return findErrorPage(config, 400);
-
     std::string contentType = contentTypeHeader->second;
     if (contentType.find("application/json") != std::string::npos) // if POST txt
         return (uploadTxt(config,  response));
     else if (contentType.find("multipart/form-data") != std::string::npos) //if POST file
         return (uploadFile(config, response, contentType));
+    else if (contentType.find("application/x-www-form-urlencoded") != std::string::npos)
+    {
+        std::string scriptPath = config.getRoot() + this->_path;
+        return executeCGI(scriptPath, config);
+    }
     return findErrorPage(config, 415);
 }
 
