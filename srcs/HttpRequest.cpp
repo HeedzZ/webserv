@@ -175,21 +175,14 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         }
         close(inputPipe[0]);
 
-        // Variables d'environnement nécessaires pour le script PHP
-        setenv("REQUEST_METHOD", _method.c_str(), 1);
-        setenv("SCRIPT_FILENAME", scriptPath.c_str(), 1);
-        setenv("CONTENT_LENGTH", intToString(_body.size()).c_str(), 1);
-        setenv("CONTENT_TYPE", _headers["Content-Type"].c_str(), 1);
-        setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
-        setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
-        setenv("REDIRECT_STATUS", "200", 1); // Souvent nécessaire pour PHP en CGI
-
-        // Exécuter le script PHP avec execve
-        char* args[] = {(char*)"/usr/bin/python3", (char*)scriptPath.c_str(), NULL};
-        execve("/usr/bin/python3", args, environ);
-
-        // Si execve échoue, affiche une erreur et quitte
-        perror("Erreur d'exécution du script CGI");
+        // Arguments pour execve
+        char *args[] = {
+            const_cast<char*>("/usr/bin/php"),
+            const_cast<char*>(scriptPath.c_str()),
+            NULL
+        };
+        execve("/usr/bin/php", args, &env[0]);
+        std::cerr << "Erreur d'exécution du script CGI." << std::endl;
         exit(1);
     } else if (pid > 0) {
         // Processus parent
@@ -240,7 +233,6 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         return "500 Internal Server Error: Fork failed";
     }
 }
-
 
 std::string extractJsonValue(const std::string& json, const std::string& key)
 {
