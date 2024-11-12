@@ -1,7 +1,7 @@
 #include "ServerConfig.hpp"
 #include <iostream>
 
-ServerConfig::ServerConfig() : root("./www/main"), index("index.html")
+ServerConfig::ServerConfig() : root("./www/main"), index("index.html"), _hasListen(false), _hasRoot(false)
 {}
 
 void ServerConfig::setPort(int serverPort)
@@ -67,14 +67,14 @@ std::string ServerConfig::extractLocationPath(const std::string& line)
     return path;
 }
 
-// start parsing
+// leak si pas de  root ou pas de listen, duplicate location marche pas
 bool ServerConfig::parseConfigFile(const std::string& filepath)
 {
     std::ifstream configFile(filepath.c_str());
     if (!configFile.is_open())
     {
         std::cerr << "Could not open the file: " << filepath << std::endl;
-        return false;
+        return false; // Étape 9: Valider que le fichier de configuration est accessible
     }
 
     std::string line;
@@ -103,34 +103,61 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
                 parseLocationDirective(token, line, currentLocation, inLocationBlock);
             }
             else
-                parseServerDirective(token, iss);
+            {
+                if (!parseServerDirective(token, iss, _hasListen, _hasRoot)) // Étape 2: Valider les clés requises
+                    return false;
+            }
         }
         else
         {
             if (token == "}")
-                locations.push_back(*currentLocation);
-            parseLocationDirective(token, line, currentLocation, inLocationBlock);
+            {
+                if (currentLocation != NULL)
+                    locations.push_back(*currentLocation);
+                inLocationBlock = false;
+            }
+            else
+                parseLocationDirective(token, line, currentLocation, inLocationBlock);
         }
+    }
+
+    // Vérification finale après le parsing complet
+    if (!_hasListen || !_hasRoot) // Étape 2: S'assurer que `listen` et `root` sont définis
+    {
+        std::cerr << "Missing essential configuration parameters." << std::endl;
+        return false;
     }
 
     return true;
 }
 
+
 // parse server config
-void ServerConfig::parseServerDirective(const std::string& token, std::istringstream& iss)
+bool ServerConfig::parseServerDirective(const std::string& token, std::istringstream& iss, bool& hasListen, bool& hasRoot)
 {
     if (token == "listen")
     {
         int port;
-        iss >> port;
+        if (!(iss >> port) || port < 1 || port > 65535) // Étape 4: Vérifier la validité du port
+        {
+            std::cerr << "Invalid or missing port in configuration." << std::endl;
+            return false;
+        }
         setPort(port);
+        hasListen = true;
     }
     else if (token == "root")
     {
         std::string rootPath;
         iss >> rootPath;
         rootPath.resize(rootPath.size() - 1);
+        if (rootPath.empty()) // Étape 2: Vérifier que le rootPath est défini
+        {
+            std::cerr << "Root path is missing in configuration." << std::endl;
+            return false;
+        }
         setRoot(rootPath);
+        hasRoot = true;
     }
     else if (token == "index")
     {
@@ -145,8 +172,15 @@ void ServerConfig::parseServerDirective(const std::string& token, std::istringst
         std::string path;
         iss >> code >> path;
         path.resize(path.size() - 1);
+        if (path.empty()) // Étape 9: Vérifier l'existence du chemin des pages d'erreur
+        {
+            std::cerr << "Error page path is missing or invalid." << std::endl;
+            return false;
+        }
         setErrorPage(code, path);
     }
+
+    return true;
 }
 
 //parse Locations config

@@ -201,7 +201,6 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
             const_cast<char*>(scriptPath.c_str()),
             NULL
         };
-
         execve("/usr/bin/php", args, &env[0]);
         std::cerr << "Erreur d'exécution du script CGI." << std::endl;
         exit(1);
@@ -233,10 +232,6 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         return findErrorPage(config, 500);
     }
 }
-
-
-
-
 
 std::string extractJsonValue(const std::string& json, const std::string& key)
 {

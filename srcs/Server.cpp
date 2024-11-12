@@ -25,7 +25,8 @@ std::string Server::intToString(int value)
 // Constructeur
 Server::Server(const std::string& configFile) : _server_fds(0)
 {
-    _config.parseConfigFile(configFile);
+    if(_config.parseConfigFile(configFile) == false)
+        exit(0);
     _ports = _config.getPorts();
     _config.display();
     initSockets();
