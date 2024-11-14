@@ -15,8 +15,8 @@ private:
     std::string                     index;                        // Default index file
     std::map<int, std::string>      error_pages;   // Error pages (404, 403, etc.)
     std::vector<ServerLocation>     locations;    // List of location blocks
-    bool                            _hasListen;
-    bool                            _hasRoot;
+    int                            _hasListen;
+    int                            _hasRoot;
 
 public:
     // Default constructor
@@ -41,7 +41,7 @@ public:
     void display() const;
 	bool parseConfigFile(const std::string& filepath);
     void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);
-    bool parseServerDirective(const std::string& token, std::istringstream& iss, bool& hasListen, bool& hasRoot);
+    bool parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot);
 
     std::string extractLocationPath(const std::string& line);
 };

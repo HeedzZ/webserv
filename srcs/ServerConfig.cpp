@@ -67,14 +67,27 @@ std::string ServerConfig::extractLocationPath(const std::string& line)
     return path;
 }
 
-// leak si pas de  root ou pas de listen, duplicate location marche pas
+
+/*
+
+1.Erreur de syntaxe dans le fichier de configuration.
+3.Ports et hôtes non configurés ou en conflit. // si invalid port alors leak car on getPort avant de verif le port
+4.Limites de taille incorrectes.
+5.Fichiers d’erreurs ou répertoires manquants ou non accessibles.
+6.Méthodes HTTP non reconnues ou non configurées correctement pour chaque route.
+7.Redirections mal formées ou non valides.
+8.Chemins CGI incorrects ou exécutables manquants.
+9.Conflits globaux dans la configuration empêchant une exécution cohérente.
+
+*/
+
 bool ServerConfig::parseConfigFile(const std::string& filepath)
 {
     std::ifstream configFile(filepath.c_str());
     if (!configFile.is_open())
     {
         std::cerr << "Could not open the file: " << filepath << std::endl;
-        return false; // Étape 9: Valider que le fichier de configuration est accessible
+        return false;
     }
 
     std::string line;
@@ -104,7 +117,7 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
             }
             else
             {
-                if (!parseServerDirective(token, iss, _hasListen, _hasRoot)) // Étape 2: Valider les clés requises
+                if (!parseServerDirective(token, iss, _hasListen, _hasRoot))
                     return false;
             }
         }
@@ -113,18 +126,19 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
             if (token == "}")
             {
                 if (currentLocation != NULL)
+                {
                     locations.push_back(*currentLocation);
+                    delete currentLocation;
+                }
                 inLocationBlock = false;
             }
             else
                 parseLocationDirective(token, line, currentLocation, inLocationBlock);
         }
     }
-
-    // Vérification finale après le parsing complet
-    if (!_hasListen || !_hasRoot) // Étape 2: S'assurer que `listen` et `root` sont définis
+    if (!_hasListen || _hasRoot != 1)
     {
-        std::cerr << "Missing essential configuration parameters." << std::endl;
+        std::cerr << "Missing/invalid essential configuration parameters." << std::endl;
         return false;
     }
 
@@ -133,7 +147,7 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
 
 
 // parse server config
-bool ServerConfig::parseServerDirective(const std::string& token, std::istringstream& iss, bool& hasListen, bool& hasRoot)
+bool ServerConfig::parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot)
 {
     if (token == "listen")
     {
@@ -144,7 +158,7 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
             return false;
         }
         setPort(port);
-        hasListen = true;
+        hasListen++;
     }
     else if (token == "root")
     {
@@ -157,7 +171,7 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
             return false;
         }
         setRoot(rootPath);
-        hasRoot = true;
+        hasRoot++;
     }
     else if (token == "index")
     {
