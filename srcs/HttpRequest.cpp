@@ -155,6 +155,7 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
 
     // Création des pipes
     if (pipe(outputPipe) == -1 || pipe(inputPipe) == -1) {
+        perror("Erreur de création des pipes");
         return "500 Internal Server Error: Pipe creation failed";
     }
 
@@ -162,19 +163,20 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
     if (pid == 0) {
         // Processus enfant
         close(outputPipe[0]); // Ferme la lecture du pipe de sortie
-        if (dup2(outputPipe[1], STDOUT_FILENO) == -1) { // Redirige la sortie standard vers le pipe de sortie
-            perror("dup2 failed");
+        if (dup2(outputPipe[1], STDOUT_FILENO) == -1) {
+            perror("Erreur de redirection de la sortie standard");
             exit(1);
         }
         close(outputPipe[1]);
 
         close(inputPipe[1]); // Ferme l'écriture du pipe du body
-        if (dup2(inputPipe[0], STDIN_FILENO) == -1) { // Redirige l'entrée standard vers le pipe du body
-            perror("dup2 failed");
+        if (dup2(inputPipe[0], STDIN_FILENO) == -1) {
+            perror("Erreur de redirection de l'entrée standard");
             exit(1);
         }
         close(inputPipe[0]);
 
+<<<<<<< HEAD
         // Arguments pour execve
         char *args[] = {
             const_cast<char*>("/usr/bin/php"),
@@ -183,6 +185,23 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         };
         execve("/usr/bin/php", args, &args[0]);
         std::cerr << "Erreur d'exécution du script CGI." << std::endl;
+=======
+        // Variables d'environnement nécessaires pour le script
+        setenv("REQUEST_METHOD", _method.c_str(), 1);
+        setenv("SCRIPT_FILENAME", scriptPath.c_str(), 1);
+        setenv("CONTENT_LENGTH", intToString(_body.size()).c_str(), 1);
+        setenv("CONTENT_TYPE", _headers["Content-Type"].c_str(), 1);
+        setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
+        setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
+        setenv("REDIRECT_STATUS", "200", 1); // Souvent nécessaire pour PHP en CGI
+
+        // Exécuter le script CGI (Python, PHP, etc.)
+        char* args[] = {(char*)"/usr/bin/python3", (char*)scriptPath.c_str(), NULL};
+        execve("/usr/bin/python3", args, environ);
+
+        // Si execve échoue, affiche une erreur et quitte
+        perror("Erreur d'exécution du script CGI");
+>>>>>>> 214c31efa532b5b0ab06d26c99688c184243d28c
         exit(1);
     } else if (pid > 0) {
         // Processus parent
@@ -196,7 +215,6 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
             close(inputPipe[1]);
             return "500 Internal Server Error: Failed to write to pipe";
         }
-        std::cerr << "Longueur du body à écrire : " << _body.size() << " octets, écrits : " << bytesWritten << " octets" << std::endl;
         close(inputPipe[1]); // Ferme l'écriture du pipe du body pour signaler la fin
 
         // Lecture de la sortie du script
@@ -223,7 +241,7 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         oss << output.size();
         std::string response = "HTTP/1.1 200 OK\r\n";
         response += "Content-Length: " + oss.str() + "\r\n";
-        response += "Content-Type: application/json\r\n";
+        response += "Content-Type: text/html\r\n";
         response += "\r\n";
         response += output;
         return response;
@@ -233,6 +251,7 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         return "500 Internal Server Error: Fork failed";
     }
 }
+
 
 std::string extractJsonValue(const std::string& json, const std::string& key)
 {
