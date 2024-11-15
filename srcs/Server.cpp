@@ -14,6 +14,7 @@
 #include "HttpRequest.hpp"
 #include "ServerConfig.hpp"
 
+volatile sig_atomic_t Server::signal_received = 0;
 
 std::string Server::intToString(int value)
 {
@@ -26,14 +27,17 @@ std::string Server::intToString(int value)
 Server::Server(const std::string& configFile) : _server_fds(0)
 {
     if(_config.parseConfigFile(configFile) == false)
-        exit(0);
+        throw std::runtime_error("Parsing failed.");
     _ports = _config.getPorts();
     _config.display();
     initSockets();
 }
 Server::~Server() {
     for (size_t i = 0; i < _server_fds.size(); ++i) {
+        if (_server_fds[i] != -1) {
         close(_server_fds[i]);
+        _server_fds[i] = -1; // Marquer le descripteur comme invalide
+    }
     }
 }
 
@@ -81,9 +85,10 @@ void Server::initSockets() {
 }
 
 void Server::run() {
-    while (true) {
+    this->running = true;
+    while (running) {
         int poll_count = poll(_poll_fds.data(), _poll_fds.size(), -1);
-        if (poll_count < 0) {
+        if (poll_count < 0 && running) {
             std::cerr << "Erreur : poll() échoué" << std::endl;
             continue;
         }
@@ -101,30 +106,25 @@ void Server::run() {
 }
 
 void Server::handleNewConnection(int server_fd) {
-    sockaddr_in client_address;
-    socklen_t client_len = sizeof(client_address);
-    int client_fd = accept(server_fd, (sockaddr*)&client_address, &client_len);
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+
     if (client_fd < 0) {
-        std::cerr << "Erreur : accept() échoué" << std::endl;
+        std::cerr << "Erreur lors de l'acceptation de la nouvelle connexion" << std::endl;
         return;
     }
 
-    pollfd client_poll_fd;
-    client_poll_fd.fd = client_fd;
-    client_poll_fd.events = POLLIN;
-    _poll_fds.push_back(client_poll_fd);
+    // Initialisation sécurisée de pollfd
+    struct pollfd client_pollfd;
+    client_pollfd.fd = client_fd;
+    client_pollfd.events = POLLIN;
+    client_pollfd.revents = 0; // Initialiser à 0 pour éviter des valeurs indéfinies
 
-    // Trouver le port du serveur correspondant à server_fd
-    int server_port = 0;
-    for (size_t i = 0; i < _server_fds.size(); ++i) {
-        if (_server_fds[i] == server_fd) {
-            server_port = _ports[i];
-            break;
-        }
-    }
-
-    std::cout << "Nouvelle connexion acceptée sur le port " << server_port << std::endl;
+    _poll_fds.push_back(client_pollfd);
+    std::cout << "Nouvelle connexion acceptée sur le port " << ntohs(client_addr.sin_port) << std::endl;
 }
+
 
 void Server::handleClientRequest(int clientIndex)
 {
@@ -233,7 +233,10 @@ std::string Server::generateHttpResponse(const std::string& requestedPath)
 
 void Server::removeClient(int index) {
     // Ferme le descripteur de fichier du client pour libérer les ressources
-    close(_poll_fds[index].fd);
+    if (_poll_fds[index].fd != -1) {
+        close(_poll_fds[index].fd);
+        _poll_fds[index].fd = -1; // Marquer le descripteur comme invalide
+    }
 
     // Supprime le descripteur de poll de la liste
     _poll_fds.erase(_poll_fds.begin() + index);
@@ -241,3 +244,43 @@ void Server::removeClient(int index) {
     std::cout << "Connexion client fermée et supprimée de la liste" << std::endl;
 }
 
+void Server::stop() {
+    running = false;
+    // Arrêter le serveur en fermant tous les descripteurs de socket
+
+    for (size_t i = 0; i < _poll_fds.size(); ++i) {
+        if (_poll_fds[i].fd != -1) {
+            close(_poll_fds[i].fd);
+            _poll_fds[i].fd = -1; // Marquer le descripteur comme invalide
+        }
+    }
+    _poll_fds.clear();
+
+    // Fermer tous les sockets du serveur
+    for (size_t i = 0; i < _server_fds.size(); ++i) {
+        if (_server_fds[i] != -1) {
+            close(_server_fds[i]);
+            _server_fds[i] = -1; // Assurez-vous que le descripteur est marqué comme invalide après la fermeture
+        }
+    }
+
+
+    // Mettre à jour l'état du serveur
+    std::cout << "Serveur arrêté avec succès." << std::endl;
+}
+
+bool Server::isRunning() const {
+    return this->running;
+}
+
+void    Server::setRunning(bool status)
+{
+    this->running = status;
+}
+
+void Server::signalHandler(int signal) {
+    if (signal == SIGINT) {
+        std::cout << "Signal (" << signal << ") reçu. Arrêt du serveur en cours..." << std::endl;
+        signal_received = true;
+    }
+}

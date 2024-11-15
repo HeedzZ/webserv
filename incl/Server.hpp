@@ -23,6 +23,7 @@
 #include <poll.h>
 #include <sstream>
 #include <algorithm>
+#include <csignal>
 #include "ServerConfig.hpp"
 
 class Server {
@@ -38,14 +39,20 @@ public:
     void run();                      // Boucle principale qui gère les connexions et les requêtes
     void handleNewConnection(int server_fd);      // Gère l'acceptation des nouvelles connexions
     void handleClientRequest(int clientIndex); // Traite les requêtes des clients connectés
+    void stop();
     std::string generateHttpResponse(const std::string& requestedPath);
     std::string extractRequestedPath(const std::string& buffer);
     std::string readClientRequest(int client_fd, int clientIndex);
     std::string intToString(int value);
+    bool isRunning() const;
+    void    setRunning(bool status);
+    static void signalHandler(int signal);
+    static volatile sig_atomic_t signal_received;
 
 
 
 private:
+    bool running;
     std::vector<int> _server_fds;      // Liste des descripteurs de fichiers des sockets
     std::vector<int> _ports;           // Liste des ports sur lesquels le serveur écoute
     std::vector<sockaddr_in> _addresses;                     // Port sur lequel le serveur écoute
