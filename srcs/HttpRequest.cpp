@@ -176,16 +176,6 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         }
         close(inputPipe[0]);
 
-<<<<<<< HEAD
-        // Arguments pour execve
-        char *args[] = {
-            const_cast<char*>("/usr/bin/php"),
-            const_cast<char*>(scriptPath.c_str()),
-            NULL
-        };
-        execve("/usr/bin/php", args, &args[0]);
-        std::cerr << "Erreur d'exécution du script CGI." << std::endl;
-=======
         // Variables d'environnement nécessaires pour le script
         setenv("REQUEST_METHOD", _method.c_str(), 1);
         setenv("SCRIPT_FILENAME", scriptPath.c_str(), 1);
@@ -201,7 +191,6 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
 
         // Si execve échoue, affiche une erreur et quitte
         perror("Erreur d'exécution du script CGI");
->>>>>>> 214c31efa532b5b0ab06d26c99688c184243d28c
         exit(1);
     } else if (pid > 0) {
         // Processus parent
