@@ -143,8 +143,6 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
         std::cerr << "Missing/invalid essential configuration parameters." << std::endl;
         return false;
     }
-    if (currentLocation != NULL)
-        delete currentLocation;
     return true;
 }
 
