@@ -1,219 +1,145 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Page For POST</title>
-    <style>
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: linear-gradient(45deg, #0b0b2a, #1a1a4a);
-            font-family: 'Arial', sans-serif;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        body::before {
-            content: '';
-            position: absolute;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(white, transparent 2px);
-            background-size: 50px 50px;
-            opacity: 0.1;
-            animation: stars 100s linear infinite;
-        }
-
-        @keyframes stars {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(-50%); }
-        }
-
-        .container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
-            width: 90%;
-            max-width: 500px;
-            z-index: 1;
-        }
-
-        h1 {
-            text-align: center;
-            color: #fff;
-            margin-bottom: 2rem;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-        }
-
-        .form-section {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 1.5rem;
-            border-radius: 10px;
-            margin-bottom: 1.5rem;
-        }
-
-        .form-section h2 {
-            margin-top: 0;
-            font-size: 1.2rem;
-            color: #a0a0ff;
-        }
-
-        input[type="text"],
-        textarea {
-            width: 100%;
-            padding: 0.8rem;
-            margin-bottom: 1rem;
-            border: none;
-            border-radius: 5px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            box-sizing: border-box;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        .file-label {
-            display: inline-block;
-            padding: 0.8rem 1.5rem;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .file-label:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.02);
-        }
-
-        button {
-            width: 100%;
-            padding: 1rem;
-            border: none;
-            border-radius: 5px;
-            background: linear-gradient(45deg, #4a4aff, #8080ff);
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 1rem;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(74, 74, 255, 0.4);
-        }
-
-        @keyframes glow {
-            0% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
-            50% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.8); }
-            100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
-        }
-
-        input:focus, textarea:focus {
-            outline: none;
-            animation: glow 2s infinite;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portail Galactique</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .star {
+      position: absolute;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.3; }
+      50% { opacity: 0.7; }
+      100% { opacity: 0.3; }
+    }
+    .rocket {
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+  </style>
 </head>
-<body>
-    <div class="container">
-        <h1>Test Page For POST</h1>
-        
-        <div class="form-section">
-            <h2>Upload de Texte</h2>
-            <form id="textForm">
-                <input type="text" id="fileName" placeholder="Nom du fichier" required>
-                <textarea id="fileContent" rows="4" placeholder="Votre texte ici" required></textarea>
-                <button type="submit">Envoyer le Texte</button>
-            </form>
+<body class="bg-gradient-to-b from-purple-900 via-blue-900 to-black text-white min-h-screen flex flex-col items-center justify-center p-8">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const AuthContext = React.createContext();
+
+    function AuthProvider({ children }) {
+      const [user, setUser] = React.useState(null);
+
+      const login = async (username, password) => {
+        try {
+          const response = await fetch('/cgi-bin/auth.py', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=login&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+          });
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+              setUser(username);
+              return true;
+            } else {
+              return false;
+            }
+          } else {
+            console.error('Erreur lors de la requête de connexion');
+            return false;
+          }
+        } catch (error) {
+          console.error('Erreur:', error);
+          return false;
+        }
+      };
+
+      const logout = () => setUser(null);
+
+      return (
+        <AuthContext.Provider value={{ user, login, logout }}>
+          {children}
+        </AuthContext.Provider>
+      );
+    }
+
+    function useAuth() {
+      const context = React.useContext(AuthContext);
+      if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+      }
+      return context;
+    }
+
+    function FileList() {
+      const [files, setFiles] = React.useState([]);
+      const [error, setError] = React.useState('');
+
+      const fetchFiles = () => {
+        fetch('/cgi-bin/list_files.py') // Script qui retourne les fichiers uploadés
+          .then(response => response.json())
+          .then(data => {
+            if (data.files) {
+              setFiles(data.files);
+              setError('');
+            } else {
+              setError('Aucun fichier disponible.');
+            }
+          })
+          .catch(err => {
+            console.error('Erreur lors de la récupération des fichiers:', err);
+            setError('Erreur lors de la récupération des fichiers.');
+          });
+      };
+
+      return (
+        <div className="w-full max-w-md bg-gray-900/60 p-6 rounded-lg shadow-lg">
+          <h2 className="text-xl font-bold mb-4 text-center">Fichiers Uploadés</h2>
+          <button
+            onClick={fetchFiles}
+            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 mb-4"
+          >
+            Afficher les fichiers
+          </button>
+          <div className="bg-gray-800 p-4 rounded-lg text-white max-w-full overflow-auto" style={{ maxHeight: '300px' }}>
+            {error && <p className="text-red-500">{error}</p>}
+            {files.map((file, index) => (
+              <div key={index} className="mb-2">
+                <a
+                  href={`/uploads/${file}`}
+                  download
+                  className="text-blue-400 hover:text-blue-500 underline"
+                >
+                  {file}
+                </a>
+              </div>
+            ))}
+          </div>
         </div>
+      );
+    }
 
-        <div class="form-section">
-            <h2>Upload de Fichier</h2>
-            <form id="fileForm">
-                <input type="file" id="fileInput" required>
-                <label for="fileInput" class="file-label">Choisir un fichier</label>
-                <button type="submit">Envoyer le Fichier</button>
-            </form>
+    function App() {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center">
+          <FileList />
         </div>
-    </div>
+      );
+    }
 
-    <script>
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name;
-            if (fileName) {
-                e.target.nextElementSibling.textContent = fileName;
-            }
-        });
-
-        // Fonction pour envoyer le texte
-        document.getElementById('textForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const fileName = document.getElementById('fileName').value;
-            const fileContent = document.getElementById('fileContent').value;
-
-            // Envoi des données en utilisant fetch
-            try {
-                const response = await fetch('/upload-text', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ fileName, fileContent })
-                });
-
-                if (response.ok) {
-                    alert("Texte envoyé avec succès !");
-                } else {
-                    alert("Erreur lors de l'envoi du texte.");
-                }
-            } catch (error) {
-                console.error("Erreur:", error);
-                alert("Impossible d'envoyer le texte.");
-            }
-        });
-
-        // Fonction pour envoyer le fichier
-        document.getElementById('fileForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
-
-            if (!file) {
-                alert("Veuillez choisir un fichier.");
-                return;
-            }
-
-            // Utilisation de FormData pour envoyer le fichier
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const response = await fetch('/upload-file', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    alert("Fichier envoyé avec succès !");
-                } else {
-                    alert("Erreur lors de l'envoi du fichier.");
-                }
-            } catch (error) {
-                console.error("Erreur:", error);
-                alert("Impossible d'envoyer le fichier.");
-            }
-        });
-    </script>
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AuthProvider><App /></AuthProvider>);
+  </script>
 </body>
 </html>

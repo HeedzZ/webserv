@@ -42,7 +42,6 @@ HttpRequest::HttpRequest(const std::string rawRequest)
                 _body.assign(buffer.begin(), buffer.end());
             }
         }
-        std::cout << "set Body = " << _body << std::endl;
     }
 }
 
@@ -83,7 +82,7 @@ std::string HttpRequest::handleGet(ServerConfig& config)
         if (this->_path == "/")
             fullPath = config.getRoot() + config.getIndex();
     }
-
+    std::cout << fullPath << std::endl;
     struct stat fileStat;
     if (stat(fullPath.c_str(), &fileStat) != 0) {
         return findErrorPage(config, 404); // Fichier inexistant
@@ -239,7 +238,7 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
         oss << output.size();
         std::string response = "HTTP/1.1 200 OK\r\n";
         response += "Content-Length: " + oss.str() + "\r\n";
-        response += "Content-Type: text/html\r\n";
+        response += "Content-Type: application/json\r\n";
         response += "\r\n";
         response += output;
         return response;
@@ -430,7 +429,6 @@ std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
 
     // Construire le chemin absolu
     std::string fullPath =  errorPagePath;
-    std::cout << fullPath << std::endl;
     // Vérifier si le fichier existe et est lisible
     struct stat fileStat;
     if (stat(fullPath.c_str(), &fileStat) != 0 || access(fullPath.c_str(), R_OK) != 0) {

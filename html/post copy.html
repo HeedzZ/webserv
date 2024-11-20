@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Page For POST</title>
+    <style>
+body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(45deg, #0b0b2a, #1a1a4a);
+            font-family: 'Arial', sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(white, transparent 2px);
+            background-size: 50px 50px;
+            opacity: 0.1;
+            animation: stars 100s linear infinite;
+        }
+
+        @keyframes stars {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-50%); }
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            width: 90%;
+            max-width: 500px;
+            z-index: 1;
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .form-section {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-section h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #a0a0ff;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 0.8rem;
+            margin-bottom: 1rem;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            box-sizing: border-box;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 0.8rem 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-label:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.02);
+        }
+
+        button {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 5px;
+            background: linear-gradient(45deg, #4a4aff, #8080ff);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(74, 74, 255, 0.4);
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            animation: glow 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Page For POST</h1>
+        
+        <div class="form-section">
+            <h2>Upload de Texte</h2>
+            <form id="textForm">
+                <input type="text" id="fileName" placeholder="Nom du fichier" required>
+                <textarea id="fileContent" rows="4" placeholder="Votre texte ici" required></textarea>
+                <button type="submit">Envoyer le Texte</button>
+            </form>
+        </div>
+
+        <div class="form-section">
+            <h2>Upload de Fichier</h2>
+            <form id="fileForm">
+                <input type="file" id="fileInput" required>
+                <label for="fileInput" class="file-label">Choisir un fichier</label>
+                <button type="submit">Envoyer le Fichier</button>
+            </form>
+            <!-- Bouton de téléchargement caché -->
+            <button id="downloadButton" style="display: none;">Télécharger le Fichier</button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            if (fileName) {
+                e.target.nextElementSibling.textContent = fileName;
+            }
+        });
+
+        // Fonction pour envoyer le texte
+        document.getElementById('textForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const fileName = document.getElementById('fileName').value;
+            const fileContent = document.getElementById('fileContent').value;
+
+            try {
+                const response = await fetch('/upload-text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fileName, fileContent })
+                });
+
+                if (response.ok) {
+                    alert("Texte envoyé avec succès !");
+                } else {
+                    alert("Erreur lors de l'envoi du texte.");
+                }
+            } catch (error) {
+                console.error("Erreur:", error);
+                alert("Impossible d'envoyer le texte.");
+            }
+        });
+
+        // Fonction pour envoyer le fichier
+        document.getElementById('fileForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Veuillez choisir un fichier.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload-file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    alert("Fichier envoyé avec succès !");
+                    // Rendre visible le bouton de téléchargement
+                    const downloadButton = document.getElementById('downloadButton');
+                    downloadButton.style.display = 'block';
+                    downloadButton.onclick = function() {
+                        window.location.href = '/uploads/' + file.name; // Chemin vers le fichier uploadé
+                    };
+                } else {
+                    alert("Erreur lors de l'envoi du fichier.");
+                }
+            } catch (error) {
+                console.error("Erreur:", error);
+                alert("Impossible d'envoyer le fichier.");
+            }
+        });
+    </script>
+</body>
+</html>
