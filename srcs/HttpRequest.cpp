@@ -84,6 +84,15 @@ std::string HttpRequest::handleGet(ServerConfig& config)
             fullPath = config.getRoot() + config.getIndex();
     }
 
+    struct stat fileStat;
+    if (stat(fullPath.c_str(), &fileStat) != 0) {
+        return findErrorPage(config, 404); // Fichier inexistant
+    }
+
+    if (access(fullPath.c_str(), R_OK) != 0) {
+        return findErrorPage(config, 403); // Fichier inaccessible (permission refusée)
+    }
+
     if (fullPath.find(".py") != std::string::npos) {
         return executeCGI(fullPath, config);
     }
@@ -114,7 +123,7 @@ std::string HttpRequest::handleGet(ServerConfig& config)
         }
     }
     else
-        return findErrorPage(config, 404);
+        return findErrorPage(config, 500);
     return response;
 }
 
@@ -256,6 +265,7 @@ std::string extractJsonValue(const std::string& json, const std::string& key)
 
     return json.substr(valueStart, valueEnd - valueStart);
 }
+
 std::string HttpRequest::uploadTxt(ServerConfig& config, std::string response)
 {
     std::string fileName = extractJsonValue(this->_body, "fileName");
@@ -371,21 +381,39 @@ std::string HttpRequest::handleDelete(ServerConfig& config) // 1. file exist ? 2
 
 std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
 {
+    // Obtenir le chemin de la page d'erreur à partir du code d'erreur
     std::string errorPagePath = config.getErrorPage(errorCode);
-    std::string fullPath = config.getRoot() + errorPagePath;
-
-    std::ifstream errorFile(fullPath.c_str());
-    std::string content;
-    if (errorFile)
-    {
-        std::string line;
-        while (std::getline(errorFile, line))
-            content += line + "\n";
+    if (errorPagePath.empty()) {
+        std::cerr << "Erreur : Aucune page d'erreur définie pour le code " << errorCode << std::endl;
+        return generateDefaultErrorPage(errorCode);
     }
-    else
-        content = "<html><body><h1>Error " + intToString(errorCode) + "</h1><p>Page not found.</p></body></html>";
-    std::ostringstream response;
 
+    // Construire le chemin absolu
+    std::string fullPath =  errorPagePath;
+    std::cout << fullPath << std::endl;
+    // Vérifier si le fichier existe et est lisible
+    struct stat fileStat;
+    if (stat(fullPath.c_str(), &fileStat) != 0 || access(fullPath.c_str(), R_OK) != 0) {
+        std::cerr << "Erreur : La page d'erreur " << fullPath << " est introuvable ou inaccessible" << std::endl;
+        return generateDefaultErrorPage(errorCode);
+    }
+
+    // Lire le fichier de la page d'erreur
+    std::ifstream errorFile(fullPath.c_str());
+    if (!errorFile.is_open()) {
+        std::cerr << "Erreur : Impossible d'ouvrir la page d'erreur " << fullPath << std::endl;
+        return generateDefaultErrorPage(errorCode);
+    }
+
+    std::string content;
+    std::string line;
+    while (std::getline(errorFile, line)) {
+        content += line + "\n";
+    }
+    errorFile.close();
+
+    // Construire la réponse HTTP avec la page d'erreur
+    std::ostringstream response;
     response << "HTTP/1.1 " << errorCode << " Error\r\n";
     response << "Content-Type: text/html\r\n";
     response << "Content-Length: " << content.size() << "\r\n";
@@ -394,6 +422,23 @@ std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
 
     return response.str();
 }
+
+// Générer une page d'erreur par défaut si aucune page personnalisée n'est trouvée
+std::string HttpRequest::generateDefaultErrorPage(int errorCode)
+{
+    std::ostringstream response;
+    response << "<html><body><h1>Error " << errorCode << "</h1><p>Page not found.</p></body></html>";
+
+    std::ostringstream httpResponse;
+    httpResponse << "HTTP/1.1 " << errorCode << " Error\r\n";
+    httpResponse << "Content-Type: text/html\r\n";
+    httpResponse << "Content-Length: " << response.str().size() << "\r\n";
+    httpResponse << "\r\n";
+    httpResponse << response.str();
+
+    return httpResponse.str();
+}
+
 
 
 HttpRequest::~HttpRequest()

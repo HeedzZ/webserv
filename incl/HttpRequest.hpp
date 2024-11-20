@@ -41,6 +41,7 @@ public:
 	std::string getMethod() const;
 	std::string intToString(int value);
 	std::string executeCGI(const std::string& scriptPath, ServerConfig& config);
+	std::string generateDefaultErrorPage(int errorCode);
 };
 
 #endif
