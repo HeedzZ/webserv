@@ -32,6 +32,7 @@ public:
 	std::string handleRequest(ServerConfig& config);
 	std::string handleGet(ServerConfig& config);
 	std::string	handlePost(ServerConfig& config);
+	std::string handleDownload(ServerConfig& config, std::string& response);
 	std::string uploadTxt(ServerConfig& config, std::string response);
 	std::string uploadFile(ServerConfig& config, std::string response, std::string contentType);
 	std::string handleDelete(ServerConfig& config);

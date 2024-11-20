@@ -314,6 +314,42 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     return response;
 }
 
+std::string HttpRequest::handleDownload(ServerConfig& config, std::string& response)
+{
+    size_t start = _body.find("\"filename\":\"");
+    if (start == std::string::npos)
+        return findErrorPage(config, 400);
+
+    start += 11;
+    size_t end = _body.find("\"", start);
+    if (end == std::string::npos)
+        return findErrorPage(config, 400);
+
+    std::string filename = _body.substr(start, end - start);
+
+    std::string filePath = config.getRoot() + "/upload/" + filename;
+
+    std::ifstream file(filePath.c_str(), std::ios::binary);
+    if (!file.is_open())
+        return findErrorPage(config, 404);
+
+    std::ostringstream fileStream;
+    fileStream << file.rdbuf();
+    std::string fileContent = fileStream.str();
+
+    std::ostringstream oss;
+    oss << fileContent.size();
+    response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Length: " + oss.str() + "\r\n";
+    response += "Content-Type: application/octet-stream\r\n";
+    response += "Content-Disposition: attachment; filename=\"" + filename + "\"\r\n";
+    response += "\r\n";
+    response += fileContent;
+
+    return response;
+}
+
+
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
      std::string response;
@@ -334,7 +370,11 @@ std::string HttpRequest::handlePost(ServerConfig& config)
         return findErrorPage(config, 400);
     std::string contentType = contentTypeHeader->second;
     if (contentType.find("application/json") != std::string::npos) // if POST txt
+    {
+        if (_body.find("\"action\":\"download\"") != std::string::npos)
+            return handleDownload(config, response);
         return (uploadTxt(config,  response));
+    }
     else if (contentType.find("multipart/form-data") != std::string::npos) //if POST file
         return (uploadFile(config, response, contentType));
     else if (contentType.find("application/x-www-form-urlencoded") != std::string::npos)
