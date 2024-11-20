@@ -79,7 +79,7 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
     std::string line;
     ServerLocation* currentLocation = NULL;
     bool inLocationBlock = false;
-    try 
+    try
     {
         while (std::getline(configFile, line))
         {
@@ -138,6 +138,7 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
         delete currentLocation;
         return false;
     }
+
     if (!_hasListen || !_hasRoot)
     {
         std::cerr << "Missing/invalid essential configuration parameters." << std::endl;
@@ -217,13 +218,31 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
         std::string rootValue = line.substr(line.find(token) + token.length() + 1);
         rootValue.resize(rootValue.size() - 2);
         currentLocation->setRoot(rootValue);
+
+        std::ifstream testFile(rootValue.c_str());
+        if (!testFile.is_open())
+        {
+            std::cerr << "The specified root directory does not exist: " << rootValue << std::endl;
+            throw std::runtime_error("Root directory does not exist");
+        }
     }
     else if (token == "index")
     {
         std::string indexValue = line.substr(line.find(token) + token.length() + 1);
-        indexValue.resize(indexValue.size() - 2);
+        indexValue.resize(indexValue.size() - 2); // Suppression des caractères de fin indésirables
         currentLocation->setIndex(indexValue);
+
+        // Préfixe pour la vérification
+        std::string fullPath = "html/" + indexValue;
+
+        std::ifstream testFile(fullPath.c_str());
+        if (!testFile.is_open())
+        {
+            std::cerr << "The specified index file does not exist: " << fullPath << std::endl;
+            throw std::runtime_error("Index file does not exist");
+        }
     }
+
     else if (token == "}")
         inLocationBlock = false;
 }
