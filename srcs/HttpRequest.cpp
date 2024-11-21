@@ -58,12 +58,11 @@ std::string HttpRequest::handleRequest(ServerConfig& config)
 	
 }
 
-std::string HttpRequest::handleGet(ServerConfig& config)
+std::string HttpRequest::resolveFilePath(const ServerConfig& config)
 {
-    std::string response;
     std::string fullPath;
-
     bool locationFound = false;
+
     const std::vector<ServerLocation>& locations = config.getLocations();
     for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
     {
@@ -74,57 +73,73 @@ std::string HttpRequest::handleGet(ServerConfig& config)
             break;
         }
     }
-    if (locationFound == false)
-        fullPath = config.getRoot() + _path;
 
     if (!locationFound)
     {
         if (this->_path == "/")
             fullPath = config.getRoot() + config.getIndex();
-    }
-    std::cout << fullPath << std::endl;
-    struct stat fileStat;
-    if (stat(fullPath.c_str(), &fileStat) != 0) {
-        return findErrorPage(config, 404); // Fichier inexistant
-    }
-
-    if (access(fullPath.c_str(), R_OK) != 0) {
-        return findErrorPage(config, 403); // Fichier inaccessible (permission refusée)
-    }
-
-    if (fullPath.find(".py") != std::string::npos) {
-        return executeCGI(fullPath, config);
-    }
-
-    std::ifstream file(fullPath.c_str(), std::ios::binary);
-    if (file.is_open())
-    {
-        file.seekg(0, std::ios::end);
-        std::streamsize size = file.tellg();
-        file.seekg(0, std::ios::beg);
-
-        if (size > 0 && size < std::numeric_limits<std::streamsize>::max())
+        else
         {
-            std::vector<char> buffer(static_cast<size_t>(size));
-            if (file.read(buffer.data(), size))
-            {
-                std::string fileContent(buffer.data(), size);
-                std::string contentType = getMimeType(fullPath);
-
-                std::ostringstream oss;
-                oss << fileContent.size();
-                response = "HTTP/1.1 200 OK\r\n";
-                response += "Content-Length: " + oss.str() + "\r\n";
-                response += "Content-Type: " + contentType + "\r\n";
-                response += "\r\n";
-                response += fileContent;
-            }
-        }
+            fullPath = _path;
+            fullPath = config.getRoot() + fullPath.substr(1);
+        } 
     }
-    else
+    return fullPath;
+}
+
+bool HttpRequest::isFileAccessible(const std::string& filePath)
+{
+    struct stat fileStat;
+    if (stat(filePath.c_str(), &fileStat) != 0)
+        return false;
+    if (access(filePath.c_str(), R_OK) != 0)
+        return false;
+    return true;
+}
+
+std::string HttpRequest::readFile(const std::string& filePath)
+{
+    std::ifstream file(filePath.c_str(), std::ios::binary);
+    if (!file.is_open())
+        return "";
+    file.seekg(0, std::ios::end);
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    if (size > 0 && size < std::numeric_limits<std::streamsize>::max())
+    {
+        std::vector<char> buffer(static_cast<size_t>(size));
+        if (file.read(buffer.data(), size))
+            return std::string(buffer.data(), size);
+    }
+    return "";
+}
+
+std::string HttpRequest::handleGet(ServerConfig& config)
+{
+    std::string fullPath = resolveFilePath(config);
+    if (!isFileAccessible(fullPath))
+        return findErrorPage(config, 404);
+
+    if (fullPath.find(".py") != std::string::npos && fullPath.find("uploads/") == std::string::npos)
+        return executeCGI(fullPath, config);
+
+    std::string fileContent = readFile(fullPath);
+    if (fileContent.empty())
         return findErrorPage(config, 500);
+
+    std::ostringstream oss;
+    oss << fileContent.size();
+
+    std::string response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Length: " + oss.str() + "\r\n";
+    response += "Content-Type: " + getMimeType(fullPath) + "\r\n";
+    response += "\r\n";
+    response += fileContent;
+
     return response;
 }
+
 
 
 std::string HttpRequest::getMimeType(const std::string& filePath) {
@@ -153,102 +168,119 @@ std::string HttpRequest::getMimeType(const std::string& filePath) {
         }
     }
 
-    return "application/octet-stream"; // Type MIME par défaut
+    return "application/octet-stream";
 }
 
-std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig& config) {
-    (void)config;
-    int outputPipe[2]; // Pipe pour la sortie du script
-    int inputPipe[2];  // Pipe pour transmettre le body
+void HttpRequest::createPipes(int outputPipe[2], int inputPipe[2])
+{
+    if (pipe(outputPipe) == -1 || pipe(inputPipe) == -1)
+        throw std::runtime_error("Échec de la création des pipes");
+}
 
-    // Création des pipes
-    if (pipe(outputPipe) == -1 || pipe(inputPipe) == -1) {
-        perror("Erreur de création des pipes");
-        return "500 Internal Server Error: Pipe creation failed";
-    }
-
-    pid_t pid = fork();
-    if (pid == 0) {
-        // Processus enfant
-        close(outputPipe[0]); // Ferme la lecture du pipe de sortie
-        if (dup2(outputPipe[1], STDOUT_FILENO) == -1) {
-            perror("Erreur de redirection de la sortie standard");
-            exit(1);
-        }
-        close(outputPipe[1]);
-
-        close(inputPipe[1]); // Ferme l'écriture du pipe du body
-        if (dup2(inputPipe[0], STDIN_FILENO) == -1) {
-            perror("Erreur de redirection de l'entrée standard");
-            exit(1);
-        }
-        close(inputPipe[0]);
-
-        // Variables d'environnement nécessaires pour le script
-        setenv("REQUEST_METHOD", _method.c_str(), 1);
-        setenv("SCRIPT_FILENAME", scriptPath.c_str(), 1);
-        setenv("CONTENT_LENGTH", intToString(_body.size()).c_str(), 1);
-        setenv("CONTENT_TYPE", _headers["Content-Type"].c_str(), 1);
-        setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
-        setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
-        setenv("REDIRECT_STATUS", "200", 1); // Souvent nécessaire pour PHP en CGI
-
-        // Exécuter le script CGI (Python, PHP, etc.)
-        char* args[] = {(char*)"/usr/bin/python3", (char*)scriptPath.c_str(), NULL};
-        execve("/usr/bin/python3", args, environ);
-
-        // Si execve échoue, affiche une erreur et quitte
-        perror("Erreur d'exécution du script CGI");
+void HttpRequest::setupChildProcess(int outputPipe[2], int inputPipe[2], const std::string& scriptPath)
+{
+    close(outputPipe[0]);
+    if (dup2(outputPipe[1], STDOUT_FILENO) == -1)
+    {
+        perror("Erreur de redirection de la sortie standard");
         exit(1);
-    } else if (pid > 0) {
-        // Processus parent
-        close(outputPipe[1]); // Ferme l'écriture du pipe de sortie
-        close(inputPipe[0]);  // Ferme la lecture du pipe du body
-
-        // Écriture du body dans le pipe du body
-        ssize_t bytesWritten = write(inputPipe[1], _body.c_str(), _body.size());
-        if (bytesWritten == -1) {
-            perror("Erreur lors de l'écriture dans le pipe");
-            close(inputPipe[1]);
-            return "500 Internal Server Error: Failed to write to pipe";
-        }
-        close(inputPipe[1]); // Ferme l'écriture du pipe du body pour signaler la fin
-
-        // Lecture de la sortie du script
-        std::string output;
-        char buffer[1024];
-        ssize_t bytesRead;
-        while ((bytesRead = read(outputPipe[0], buffer, sizeof(buffer) - 1)) > 0) {
-            buffer[bytesRead] = '\0';
-            output += buffer;
-        }
-        close(outputPipe[0]); // Ferme la lecture après la lecture complète
-
-        int status;
-        if (waitpid(pid, &status, 0) == -1) {
-            perror("Erreur lors de l'attente du processus enfant");
-            return "500 Internal Server Error: Failed to wait for CGI process";
-        }
-        if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-            return "502 Bad Gateway: CGI script execution failed";
-        }
-
-        // Construction de la réponse HTTP
-        std::ostringstream oss;
-        oss << output.size();
-        std::string response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Length: " + oss.str() + "\r\n";
-        response += "Content-Type: application/json\r\n";
-        response += "\r\n";
-        response += output;
-        return response;
-    } else {
-        // Échec du fork
-        perror("Erreur lors du fork");
-        return "500 Internal Server Error: Fork failed";
     }
+    close(outputPipe[1]);
+
+    close(inputPipe[1]);
+    if (dup2(inputPipe[0], STDIN_FILENO) == -1)
+    {
+        perror("Erreur de redirection de l'entrée standard");
+        exit(1);
+    }
+    close(inputPipe[0]);
+
+    setupCGIEnvironment(scriptPath);
+
+    char* args[] = {(char*)"/usr/bin/python3", (char*)scriptPath.c_str(), NULL};
+    execve("/usr/bin/python3", args, environ);
+
+    perror("Erreur d'exécution du script CGI");
+    exit(1);
 }
 
+void HttpRequest::setupCGIEnvironment(const std::string& scriptPath)
+{
+    setenv("REQUEST_METHOD", _method.c_str(), 1);
+    setenv("SCRIPT_FILENAME", scriptPath.c_str(), 1);
+    setenv("CONTENT_LENGTH", intToString(_body.size()).c_str(), 1);
+    setenv("CONTENT_TYPE", _headers["Content-Type"].c_str(), 1);
+    setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
+    setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
+    setenv("REDIRECT_STATUS", "200", 1);
+}
+
+std::string HttpRequest::handleParentProcess(int outputPipe[2], int inputPipe[2], pid_t pid)
+{
+    close(outputPipe[1]);
+    close(inputPipe[0]);
+
+    ssize_t bytesWritten = write(inputPipe[1], _body.c_str(), _body.size());
+    close(inputPipe[1]);
+    if (bytesWritten == -1)
+        throw std::runtime_error("Erreur lors de l'écriture dans le pipe d'entrée");
+
+    std::string output;
+    char buffer[1024];
+    ssize_t bytesRead;
+    while ((bytesRead = read(outputPipe[0], buffer, sizeof(buffer) - 1)) > 0)
+    {
+        buffer[bytesRead] = '\0';
+        output += buffer;
+    }
+    close(outputPipe[0]);
+
+    int status;
+    if (waitpid(pid, &status, 0) == -1)
+        throw std::runtime_error("Erreur lors de l'attente du processus CGI");
+    if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
+        throw std::runtime_error("Le script CGI a retourné une erreur");
+    return constructCGIResponse(output);
+}
+
+std::string HttpRequest::constructCGIResponse(const std::string& output)
+{
+    std::ostringstream oss;
+    oss << output.size();
+
+    std::string response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Length: " + oss.str() + "\r\n";
+    response += "Content-Type: text/html\r\n";
+    response += "\r\n";
+    response += output;
+
+    return response;
+}
+
+std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig& config)
+{
+    (void)config;
+    
+    try
+    {
+        int outputPipe[2], inputPipe[2];
+        createPipes(outputPipe, inputPipe);
+
+        pid_t pid = fork();
+        if (pid == 0)
+            setupChildProcess(outputPipe, inputPipe, scriptPath);
+        else if (pid > 0)
+            return handleParentProcess(outputPipe, inputPipe, pid);
+        else
+            throw std::runtime_error("Fork failed");
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Erreur CGI : " << e.what() << std::endl;
+        return generateDefaultErrorPage(500);
+    }
+    return generateDefaultErrorPage(500);
+}
 
 std::string extractJsonValue(const std::string& json, const std::string& key)
 {
@@ -272,7 +304,7 @@ std::string HttpRequest::uploadTxt(ServerConfig& config, std::string response)
 
     if (fileName.empty() || fileContent.empty())
         return findErrorPage(config, 400);
-    std::string targetPath = "upload/" + fileName;
+    std::string targetPath = "html/uploads/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
@@ -299,7 +331,7 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     size_t contentStart = _body.find("\r\n\r\n", fileNameEndPos) + 4;
     size_t contentEnd = _body.find(boundary, contentStart) - 2;
     std::string fileContent = _body.substr(contentStart, contentEnd - contentStart);
-    std::string targetPath = "upload/" + fileName;
+    std::string targetPath = "html/uploads/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
@@ -326,7 +358,7 @@ std::string HttpRequest::handleDownload(ServerConfig& config, std::string& respo
 
     std::string filename = _body.substr(start, end - start);
 
-    std::string filePath = config.getRoot() + "/upload/" + filename;
+    std::string filePath = config.getRoot() + "/uploads/" + filename;
 
     std::ifstream file(filePath.c_str(), std::ios::binary);
     if (!file.is_open())
@@ -368,17 +400,14 @@ std::string HttpRequest::handlePost(ServerConfig& config)
     if (contentTypeHeader == _headers.end())
         return findErrorPage(config, 400);
     std::string contentType = contentTypeHeader->second;
-    if (contentType.find("application/json") != std::string::npos) // if POST txt
-    {
-        if (_body.find("\"action\":\"download\"") != std::string::npos)
-            return handleDownload(config, response);
+    if (contentType.find("application/json") != std::string::npos)
         return (uploadTxt(config,  response));
-    }
     else if (contentType.find("multipart/form-data") != std::string::npos) //if POST file
         return (uploadFile(config, response, contentType));
     else if (contentType.find("application/x-www-form-urlencoded") != std::string::npos)
     {
-        std::string scriptPath = config.getRoot() + this->_path;
+        std::string scriptPath = _path;
+        scriptPath = config.getRoot() + scriptPath.substr(1);
         return executeCGI(scriptPath, config);
     }
     return findErrorPage(config, 415);

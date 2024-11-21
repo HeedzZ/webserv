@@ -12,74 +12,127 @@
     body {
       margin: 0;
       font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(45deg, #0b0b2a, #1a1a4a);
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
     }
-    .star {
-      position: absolute;
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0% { opacity: 0.3; }
-      50% { opacity: 0.7; }
-      100% { opacity: 0.3; }
-    }
-    .rocket {
-      animation: bounce 2s infinite;
-    }
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-20px); }
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 2rem;
+      border-radius: 20px;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+      width: 90%;
+      max-width: 500px;
     }
   </style>
 </head>
-<body class="bg-gradient-to-b from-purple-900 via-blue-900 to-black text-white min-h-screen flex flex-col items-center justify-center p-8">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const AuthContext = React.createContext();
+    function FileUpload() {
+      // Upload de texte
+      const handleTextUpload = async (e) => {
+        e.preventDefault();
+        const fileName = e.target.elements.fileName.value;
+        const fileContent = e.target.elements.fileContent.value;
 
-    function AuthProvider({ children }) {
-      const [user, setUser] = React.useState(null);
-
-      const login = async (username, password) => {
         try {
-          const response = await fetch('/cgi-bin/auth.py', {
+          const response = await fetch('/upload-text', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `action=login&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ fileName, fileContent }),
           });
+
           if (response.ok) {
-            const result = await response.json();
-            if (result.success) {
-              setUser(username);
-              return true;
-            } else {
-              return false;
-            }
+            alert("Texte envoyé avec succès !");
           } else {
-            console.error('Erreur lors de la requête de connexion');
-            return false;
+            alert("Erreur lors de l'envoi du texte.");
           }
         } catch (error) {
-          console.error('Erreur:', error);
-          return false;
+          console.error("Erreur lors de l'envoi du texte:", error);
+          alert("Impossible d'envoyer le texte.");
         }
       };
 
-      const logout = () => setUser(null);
+      // Upload de fichier
+      const handleFileUpload = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+
+        try {
+          const response = await fetch('/upload-file', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (response.ok) {
+            alert("Fichier envoyé avec succès !");
+          } else {
+            alert("Erreur lors de l'envoi du fichier.");
+          }
+        } catch (error) {
+          console.error("Erreur lors de l'envoi du fichier:", error);
+          alert("Impossible d'envoyer le fichier.");
+        }
+      };
 
       return (
-        <AuthContext.Provider value={{ user, login, logout }}>
-          {children}
-        </AuthContext.Provider>
-      );
-    }
+        <div className="container mb-8">
+          <h2 className="text-xl font-bold mb-4 text-center">Uploader Fichier ou Texte</h2>
 
-    function useAuth() {
-      const context = React.useContext(AuthContext);
-      if (!context) {
-        throw new Error('useAuth must be used within an AuthProvider');
-      }
-      return context;
+          {/* Formulaire pour l'upload de texte */}
+          <form onSubmit={handleTextUpload} className="mb-4">
+            <label className="block mb-2">Nom du fichier texte :</label>
+            <input
+              type="text"
+              name="fileName"
+              className="w-full mb-4 p-2 rounded-lg bg-gray-800 text-white"
+              placeholder="Nom du fichier"
+              required
+            />
+            <label className="block mb-2">Contenu du texte :</label>
+            <textarea
+              name="fileContent"
+              className="w-full mb-4 p-2 rounded-lg bg-gray-800 text-white"
+              placeholder="Contenu du texte"
+              rows="4"
+              required
+            ></textarea>
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 transform hover:scale-105"
+            >
+              Envoyer le Texte
+            </button>
+          </form>
+
+          {/* Formulaire pour l'upload de fichier */}
+          <form onSubmit={handleFileUpload} encType="multipart/form-data">
+            <label className="block mb-2">Sélectionnez un fichier :</label>
+            <input
+              type="file"
+              name="file"
+              className="w-full mb-4 p-2 rounded-lg bg-gray-800 text-white"
+              required
+            />
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 transform hover:scale-105"
+            >
+              Envoyer le Fichier
+            </button>
+          </form>
+        </div>
+      );
     }
 
     function FileList() {
@@ -87,9 +140,9 @@
       const [error, setError] = React.useState('');
 
       const fetchFiles = () => {
-        fetch('/cgi-bin/list_files.py') // Script qui retourne les fichiers uploadés
-          .then(response => response.json())
-          .then(data => {
+        fetch('/cgi-bin/list_files.py')
+          .then((response) => response.json())
+          .then((data) => {
             if (data.files) {
               setFiles(data.files);
               setError('');
@@ -97,14 +150,14 @@
               setError('Aucun fichier disponible.');
             }
           })
-          .catch(err => {
+          .catch((err) => {
             console.error('Erreur lors de la récupération des fichiers:', err);
             setError('Erreur lors de la récupération des fichiers.');
           });
       };
 
       return (
-        <div className="w-full max-w-md bg-gray-900/60 p-6 rounded-lg shadow-lg">
+        <div className="container">
           <h2 className="text-xl font-bold mb-4 text-center">Fichiers Uploadés</h2>
           <button
             onClick={fetchFiles}
@@ -133,13 +186,14 @@
     function App() {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center">
+          <FileUpload />
           <FileList />
         </div>
       );
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<AuthProvider><App /></AuthProvider>);
+    root.render(<App />);
   </script>
 </body>
 </html>

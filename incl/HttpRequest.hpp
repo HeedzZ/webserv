@@ -29,7 +29,11 @@ private:
 public:
 	HttpRequest(const std::string rawRequest);
 	~HttpRequest();
+	//Handle GET fonctions :
 	std::string handleRequest(ServerConfig& config);
+	std::string resolveFilePath(const ServerConfig& config);
+	bool 		isFileAccessible(const std::string& filePath);
+	std::string readFile(const std::string& filePath);
 	std::string handleGet(ServerConfig& config);
 	std::string	handlePost(ServerConfig& config);
 	std::string handleDownload(ServerConfig& config, std::string& response);
@@ -41,6 +45,12 @@ public:
 	std::string getPath() const;
 	std::string getMethod() const;
 	std::string intToString(int value);
+	//Execute CGI fonctions :
+	void createPipes(int outputPipe[2], int inputPipe[2]);
+	void setupChildProcess(int outputPipe[2], int inputPipe[2], const std::string& scriptPath);
+	void setupCGIEnvironment(const std::string& scriptPath);
+	std::string handleParentProcess(int outputPipe[2], int inputPipe[2], pid_t pid);
+	std::string constructCGIResponse(const std::string& output);
 	std::string executeCGI(const std::string& scriptPath, ServerConfig& config);
 	std::string generateDefaultErrorPage(int errorCode);
 };
