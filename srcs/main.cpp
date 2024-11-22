@@ -6,9 +6,10 @@ Server* globalServerPointer = NULL;
 
 void signalHandlerWrapper(int signal)
 {
+    (void) signal;
     if (globalServerPointer != NULL)
     {
-        std::cout << "Signal (" << signal << ") reçu. Fermeture du serveur en cours..." << std::endl;
+        std::cout << std::endl;
         globalServerPointer->stop();
     }
 }
