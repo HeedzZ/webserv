@@ -39,12 +39,12 @@ void ServerConfig::setErrorPage(int code, const std::string& path)
     error_pages[code] = path;
 }
 
-std::string ServerConfig::getErrorPage(int errorCode) const {
+std::string ServerConfig::getErrorPage(int errorCode) const
+{
     std::map<int, std::string>::const_iterator it = error_pages.find(errorCode);
-    if (it != error_pages.end()) {
-        return it->second;  // Chemin de la page d'erreur définie
-    }
-    return "";  // Retourne une chaîne vide si aucune page n'est définie pour ce code d'erreur
+    if (it != error_pages.end())
+        return it->second;
+    return "";
 }
 
 void ServerConfig::addLocation(const ServerLocation& location)
@@ -95,26 +95,8 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
 
             if (!inLocationBlock)
             {
-                if (token == "location")
-                {
-                    std::string locationPath = extractLocationPath(line);
-                    for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
-                    {
-                        if (it->getPath() == locationPath)
-                        {
-                            std::cerr << "Duplicate location path: " << locationPath << std::endl;
-                            return false;
-                        }
-                    }
-                    currentLocation = new ServerLocation(locationPath);
-                    inLocationBlock = true;
-                    parseLocationDirective(token, line, currentLocation, inLocationBlock);
-                }
-                else
-                {
-                    if (!parseServerDirective(token, iss, _hasListen, _hasRoot))
-                        return false;
-                }
+                if (processServerOrLocation(token, iss, line, currentLocation, inLocationBlock) == false)
+                    return false;
             }
             else
             {
@@ -148,12 +130,37 @@ bool ServerConfig::parseConfigFile(const std::string& filepath)
 }
 
 
+bool ServerConfig::processServerOrLocation(const std::string& token, std::istringstream& iss, const std::string& line, ServerLocation*& currentLocation, bool& inLocationBlock)
+{
+    if (token == "location")
+    {
+        std::string locationPath = extractLocationPath(line);
+        for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
+        {
+            if (it->getPath() == locationPath)
+            {
+                std::cerr << "Duplicate location path: " << locationPath << std::endl;
+                return false;
+            }
+        }
+        currentLocation = new ServerLocation(locationPath);
+        inLocationBlock = true;
+        parseLocationDirective(token, line, currentLocation, inLocationBlock);
+    }
+    else
+    {
+        if (!parseServerDirective(token, iss, _hasListen, _hasRoot))
+            return false;
+    }
+    return true;
+}
+
 bool ServerConfig::parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot)
 {
     if (token == "listen")
     {
         int port;
-        if (!(iss >> port) || port < 1 || port > 65535) // Étape 4: Vérifier la validité du port
+        if (!(iss >> port) || port < 1 || port > 65535)
         {
             std::cerr << "Invalid or missing port in configuration." << std::endl;
             return false;
@@ -163,16 +170,7 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
     }
     else if (token == "root")
     {
-        std::string rootPath;
-        iss >> rootPath;
-        rootPath.resize(rootPath.size() - 1);
-        if (rootPath.empty()) // Étape 2: Vérifier que le rootPath est défini
-        {
-            std::cerr << "Root path is missing in configuration." << std::endl;
-            return false;
-        }
-        setRoot(rootPath);
-        hasRoot++;
+        return parseRootDirective(iss, hasRoot);
     }
     else if (token == "index")
     {
@@ -182,29 +180,47 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
         setIndex(indexPage);
     }
     else if (token == "error_page")
-    {
-        int code;
-        std::string path;
-        iss >> code >> path;
-        path.resize(path.size() - 1); // Supprime le dernier caractère (ex : un point-virgule)
-        if (path.empty())
-        {
-            std::cerr << "Error page path is missing or invalid." << std::endl;
-            return false;
-        }
-        std::ifstream testFile(path.c_str());
-        if (!testFile.is_open())
-        {
-            std::cerr << "Error page file does not exist: " << path << std::endl;
-            return false;
-        }
-        testFile.close();
-        setErrorPage(code, path);
-    }
+        return parseErrorPageDirective(iss);
     return true;
 }
 
-//parse Locations config
+bool ServerConfig::parseRootDirective(std::istringstream& iss, int& hasRoot)
+{
+    std::string rootPath;
+    iss >> rootPath;
+    rootPath.resize(rootPath.size() - 1);
+    if (rootPath.empty())
+    {
+        std::cerr << "Root path is missing in configuration." << std::endl;
+        return false;
+    }
+    setRoot(rootPath);
+    hasRoot++;
+    return true;
+}
+
+bool ServerConfig::parseErrorPageDirective(std::istringstream& iss)
+{
+    int code;
+    std::string path;
+    iss >> code >> path;
+    path.resize(path.size() - 1);
+    if (path.empty())
+    {
+        std::cerr << "Error page path is missing or invalid." << std::endl;
+        return false;
+    }
+    std::ifstream testFile(path.c_str());
+    if (!testFile.is_open())
+    {
+        std::cerr << "Error page file does not exist: " << path << std::endl;
+        return false;
+    }
+    testFile.close();
+    setErrorPage(code, path);
+    return true;
+}
+
 void ServerConfig::parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock)
 {
     if (token == "server_name" || token == "listen")
@@ -227,24 +243,26 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
         }
     }
     else if (token == "index")
-    {
-        std::string indexValue = line.substr(line.find(token) + token.length() + 1);
-        indexValue.resize(indexValue.size() - 2); // Suppression des caractères de fin indésirables
-        currentLocation->setIndex(indexValue);
-
-        // Préfixe pour la vérification
-        std::string fullPath = "html/" + indexValue;
-
-        std::ifstream testFile(fullPath.c_str());
-        if (!testFile.is_open())
-        {
-            std::cerr << "The specified index file does not exist: " << fullPath << std::endl;
-            throw std::runtime_error("Index file does not exist");
-        }
-    }
-
+        parseIndexDirective(line, currentLocation);
     else if (token == "}")
         inLocationBlock = false;
+}
+
+void ServerConfig::parseIndexDirective(const std::string& line, ServerLocation* currentLocation)
+{
+    std::string indexValue = line.substr(line.find("index") + 6);
+    indexValue.resize(indexValue.size() - 2);
+
+    currentLocation->setIndex(indexValue);
+
+    std::string fullPath = "html/" + indexValue;
+
+    std::ifstream testFile(fullPath.c_str());
+    if (!testFile.is_open())
+    {
+        std::cerr << "The specified index file does not exist: " << fullPath << std::endl;
+        throw std::runtime_error("Index file does not exist");
+    }
 }
 
 void ServerConfig::display() const
@@ -276,3 +294,5 @@ void ServerConfig::display() const
         std::cout << "-----------------------\n";
     }
 }
+
+

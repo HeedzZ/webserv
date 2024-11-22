@@ -42,6 +42,10 @@ public:
 	bool parseConfigFile(const std::string& filepath);
     void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);
     bool parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot);
+    bool processServerOrLocation(const std::string& token, std::istringstream& iss, const std::string& line, ServerLocation*& currentLocation, bool& inLocationBlock);
+    bool parseErrorPageDirective(std::istringstream& iss);
+    bool parseRootDirective(std::istringstream& iss, int& hasRoot);
+    void parseIndexDirective(const std::string& line, ServerLocation* currentLocation);
 
     std::string extractLocationPath(const std::string& line);
 };
