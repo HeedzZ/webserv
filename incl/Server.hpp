@@ -28,42 +28,56 @@
 
 class Server {
 public:
-    // Constructeur
+    // Constructeur et destructeur
     Server(const std::string& configFile);
     ~Server();
 
     // Méthodes principales
-    void initSockets();               // Crée le socket et le configure
-    void bindSocket();               // Attache le socket à une adresse et un port
-    void listenSocket();             // Met le socket en écoute
-    void run();                      // Boucle principale qui gère les connexions et les requêtes
-    void handleNewConnection(int server_fd);      // Gère l'acceptation des nouvelles connexions
-    void handleClientRequest(int clientIndex); // Traite les requêtes des clients connectés
+    void initSockets();
+    void run();                      
     void stop();
-    std::string generateHttpResponse(const std::string& requestedPath);
-    std::string extractRequestedPath(const std::string& buffer);
-    std::string readClientRequest(int client_fd, int clientIndex);
-    std::string intToString(int value);
     bool isRunning() const;
-    void    setRunning(bool status);
+    void setRunning(bool status);
+
+    // Gestion des signaux
     static void signalHandler(int signal);
-    static volatile sig_atomic_t signal_received;
 
-
+    std::string intToString(int value);
+    void logMessage(const std::string& level, const std::string& message) const;
 
 private:
+    // Helpers pour les sockets
+    int createSocket();
+    void configureSocket(int server_fd);
+    void bindSocket(int server_fd, int port);
+    void listenOnSocket(int server_fd);
+    void addServerSocketToPoll(int server_fd);
+    void cleanupSockets();
+
+    // Gestion des connexions
+    void handleNewConnection(int server_fd);
+    void handleClientRequest(int clientIndex);
+    void logResponseDetails(const std::string& response, const std::string& path);
+    std::string readClientRequest(int client_fd, int clientIndex);
+    void removeClient(int index);
+
+    // Utilitaires HTTP
+    std::string generateHttpResponse(const std::string& requestedPath);
+    std::string extractRequestedPath(const std::string& buffer);
+
+    // Vérification des sockets
+    bool isServerSocket(int fd) const;
+
+    // Variables membres
     bool running;
-    std::vector<int> _server_fds;      // Liste des descripteurs de fichiers des sockets
-    std::vector<int> _ports;           // Liste des ports sur lesquels le serveur écoute
-    std::vector<sockaddr_in> _addresses;                     // Port sur lequel le serveur écoute
-    std::vector<pollfd> _poll_fds;   // Vecteur de pollfd pour gérer les connexions client
-    ServerConfig    _config;
+    std::vector<int> _server_fds;      // Liste des sockets serveurs
+    std::vector<int> _ports;           // Liste des ports en écoute
+    std::vector<sockaddr_in> _addresses; // Adresses des sockets
+    std::vector<pollfd> _poll_fds;     // Liste des descripteurs pour poll
+    ServerConfig _config;
 
-    void addClient(int client_fd);   // Ajoute un client au vecteur de poll
-    void removeClient(int index);    // Supprime un client du vecteur de poll
-    std::string createHttpResponse(int statusCode, const std::string& contentType, const std::string& body); // Génère une réponse HTTP simple
-    std::string getStatusMessage(int statusCode);
-
+    // Variable statique pour gérer les signaux
+    static volatile sig_atomic_t signal_received;
 };
 
 #endif // SERVER_HPP

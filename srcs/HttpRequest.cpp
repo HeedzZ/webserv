@@ -345,42 +345,6 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     return response;
 }
 
-std::string HttpRequest::handleDownload(ServerConfig& config, std::string& response)
-{
-    size_t start = _body.find("\"filename\":\"");
-    if (start == std::string::npos)
-        return findErrorPage(config, 400);
-
-    start += 11;
-    size_t end = _body.find("\"", start);
-    if (end == std::string::npos)
-        return findErrorPage(config, 400);
-
-    std::string filename = _body.substr(start, end - start);
-
-    std::string filePath = config.getRoot() + "/uploads/" + filename;
-
-    std::ifstream file(filePath.c_str(), std::ios::binary);
-    if (!file.is_open())
-        return findErrorPage(config, 404);
-
-    std::ostringstream fileStream;
-    fileStream << file.rdbuf();
-    std::string fileContent = fileStream.str();
-
-    std::ostringstream oss;
-    oss << fileContent.size();
-    response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Length: " + oss.str() + "\r\n";
-    response += "Content-Type: application/octet-stream\r\n";
-    response += "Content-Disposition: attachment; filename=\"" + filename + "\"\r\n";
-    response += "\r\n";
-    response += fileContent;
-
-    return response;
-}
-
-
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
      std::string response;
@@ -402,7 +366,7 @@ std::string HttpRequest::handlePost(ServerConfig& config)
     std::string contentType = contentTypeHeader->second;
     if (contentType.find("application/json") != std::string::npos)
         return (uploadTxt(config,  response));
-    else if (contentType.find("multipart/form-data") != std::string::npos) //if POST file
+    else if (contentType.find("multipart/form-data") != std::string::npos)
         return (uploadFile(config, response, contentType));
     else if (contentType.find("application/x-www-form-urlencoded") != std::string::npos)
     {
@@ -416,7 +380,7 @@ std::string HttpRequest::handlePost(ServerConfig& config)
 
 
 
-std::string HttpRequest::handleDelete(ServerConfig& config) // 1. file exist ? 2.permission ? 3. suppr
+std::string HttpRequest::handleDelete(ServerConfig& config)
 {
     std::string response;
 
@@ -449,37 +413,32 @@ std::string HttpRequest::handleDelete(ServerConfig& config) // 1. file exist ? 2
 
 std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
 {
-    // Obtenir le chemin de la page d'erreur à partir du code d'erreur
     std::string errorPagePath = config.getErrorPage(errorCode);
-    if (errorPagePath.empty()) {
+    if (errorPagePath.empty())
+    {
         std::cerr << "Erreur : Aucune page d'erreur définie pour le code " << errorCode << std::endl;
         return generateDefaultErrorPage(errorCode);
     }
-
-    // Construire le chemin absolu
     std::string fullPath =  errorPagePath;
-    // Vérifier si le fichier existe et est lisible
     struct stat fileStat;
-    if (stat(fullPath.c_str(), &fileStat) != 0 || access(fullPath.c_str(), R_OK) != 0) {
+    if (stat(fullPath.c_str(), &fileStat) != 0 || access(fullPath.c_str(), R_OK) != 0)
+    {
         std::cerr << "Erreur : La page d'erreur " << fullPath << " est introuvable ou inaccessible" << std::endl;
         return generateDefaultErrorPage(errorCode);
     }
-
-    // Lire le fichier de la page d'erreur
     std::ifstream errorFile(fullPath.c_str());
-    if (!errorFile.is_open()) {
+    if (!errorFile.is_open())
+    {
         std::cerr << "Erreur : Impossible d'ouvrir la page d'erreur " << fullPath << std::endl;
         return generateDefaultErrorPage(errorCode);
     }
 
     std::string content;
     std::string line;
-    while (std::getline(errorFile, line)) {
+    while (std::getline(errorFile, line))
         content += line + "\n";
-    }
     errorFile.close();
 
-    // Construire la réponse HTTP avec la page d'erreur
     std::ostringstream response;
     response << "HTTP/1.1 " << errorCode << " Error\r\n";
     response << "Content-Type: text/html\r\n";
@@ -490,7 +449,6 @@ std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
     return response.str();
 }
 
-// Générer une page d'erreur par défaut si aucune page personnalisée n'est trouvée
 std::string HttpRequest::generateDefaultErrorPage(int errorCode)
 {
     std::ostringstream response;
@@ -506,7 +464,10 @@ std::string HttpRequest::generateDefaultErrorPage(int errorCode)
     return httpResponse.str();
 }
 
-
+std::string HttpRequest::getPath() const
+{
+    return _path;
+}
 
 HttpRequest::~HttpRequest()
 {
