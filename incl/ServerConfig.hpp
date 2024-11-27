@@ -15,6 +15,7 @@ private:
     std::string                     index;                        // Default index file
     std::map<int, std::string>      error_pages;   // Error pages (404, 403, etc.)
     std::vector<ServerLocation>     locations;    // List of location blocks
+    std::string                     _serverName;
     int                            _hasListen;
     int                            _hasRoot;
 
@@ -34,6 +35,10 @@ public:
 
     void setErrorPage(int code, const std::string& path);
     std::string getErrorPage(int errorCode) const;
+
+    void setServerName(const std::string& name);
+    const std::string& getServerName(void);
+
 
     void addLocation(const ServerLocation& location);
     const std::vector<ServerLocation>& getLocations() const;

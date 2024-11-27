@@ -9,6 +9,17 @@ void ServerConfig::setPort(int serverPort)
     ports.push_back(serverPort);
 }
 
+void ServerConfig::setServerName(const std::string& name)
+{
+    _serverName = name;
+}
+
+
+const std::string& ServerConfig::getServerName(void)
+{
+    return _serverName;
+}
+
 const std::vector<int>& ServerConfig::getPorts() const
 {
     return ports;
@@ -181,6 +192,13 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
     }
     else if (token == "error_page")
         return parseErrorPageDirective(iss);
+    else if (token == "server_name")
+    {
+        std::string name;
+        iss >> name;
+        name.resize(name.size() - 1);
+        setServerName(name);
+    }
     return true;
 }
 
@@ -268,6 +286,7 @@ void ServerConfig::parseIndexDirective(const std::string& line, ServerLocation* 
 void ServerConfig::display() const
 {
     std::cout << "Server Configuration:\n";
+    std::cout << "Server Name: " << _serverName << std::endl;
 
     std::cout << "Ports: ";
     for (size_t i = 0; i < ports.size(); ++i)
