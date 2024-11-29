@@ -24,6 +24,8 @@
 #include <sstream>
 #include <algorithm>
 #include <csignal>
+#include <stdexcept>
+#include <fstream>
 #include "ServerConfig.hpp"
 
 class Server {
@@ -44,6 +46,7 @@ public:
 
     std::string intToString(int value);
     void logMessage(const std::string& level, const std::string& message) const;
+    std::string logMessageError(const std::string& level, const std::string& message) const;
 
 private:
     // Helpers pour les sockets
