@@ -31,7 +31,7 @@ Server::Server(const std::string& configFile) : running(false)
         throw std::runtime_error("Parsing failed.");
     logMessage("INFO", "Fichier de configuration analysé avec succès.");
     _ports = _config.getPorts();
-    _config.display();
+    //_config.display();
     initSockets();
 }
 

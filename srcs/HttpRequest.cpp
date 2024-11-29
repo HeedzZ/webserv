@@ -347,8 +347,8 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
 
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
-     std::string response;
-    
+    std::string response;
+
     std::map<std::string, std::string>::const_iterator it = this->_headers.find("Content-Length");
     if (it == this->_headers.end())
         return findErrorPage(config, 411);
@@ -357,15 +357,17 @@ std::string HttpRequest::handlePost(ServerConfig& config)
     std::istringstream lengthStream(it->second);
     lengthStream >> contentLength;
 
+    if (contentLength == 0)
+        return findErrorPage(config, 400);
     if (this->_body.size() != static_cast<std::string::size_type>(contentLength))
         return findErrorPage(config, 400);
-
     std::map<std::string, std::string>::const_iterator contentTypeHeader = _headers.find("Content-Type");
     if (contentTypeHeader == _headers.end())
         return findErrorPage(config, 400);
+
     std::string contentType = contentTypeHeader->second;
     if (contentType.find("application/json") != std::string::npos)
-        return (uploadTxt(config,  response));
+        return (uploadTxt(config, response));
     else if (contentType.find("multipart/form-data") != std::string::npos)
         return (uploadFile(config, response, contentType));
     else if (contentType.find("application/x-www-form-urlencoded") != std::string::npos)
