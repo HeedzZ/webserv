@@ -16,6 +16,7 @@ private:
     std::map<int, std::string>      error_pages;   // Error pages (404, 403, etc.)
     std::vector<ServerLocation>     locations;    // List of location blocks
     std::string                     _serverName;
+    std::string                     _host;
     int                            _hasListen;
     int                            _hasRoot;
 
@@ -39,10 +40,13 @@ public:
     void setServerName(const std::string& name);
     const std::string& getServerName(void);
 
+    void setHost(const std::string& host);
+    const std::string& getHost() const;
 
     void addLocation(const ServerLocation& location);
     const std::vector<ServerLocation>& getLocations() const;
 
+    bool isValidIP(const std::string& ip) const;
     void display() const;
 	bool parseConfigFile(const std::string& filepath);
     void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);

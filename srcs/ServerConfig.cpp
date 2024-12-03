@@ -1,7 +1,7 @@
 #include "ServerConfig.hpp"
 #include <iostream>
 
-ServerConfig::ServerConfig() : root("./www/main"), index("index.html"), _hasListen(false), _hasRoot(false)
+ServerConfig::ServerConfig() : root("./www/main"), index("index.html"), _host("127.0.0.1"), _hasListen(false), _hasRoot(false)
 {}
 
 void ServerConfig::setPort(int serverPort)
@@ -69,6 +69,19 @@ const std::vector<ServerLocation>& ServerConfig::getLocations() const
     return locations;
 }
 
+void ServerConfig::setHost(const std::string& host)
+{
+    if (!isValidIP(host)) {
+        std::cerr << "Invalid IP address format: " << host << std::endl;
+        throw std::invalid_argument("Invalid IP address format");
+    }
+    _host = host;
+}
+
+const std::string& ServerConfig::getHost() const
+{
+    return _host;
+}
 
 std::string ServerConfig::extractLocationPath(const std::string& line)
 {
@@ -76,6 +89,43 @@ std::string ServerConfig::extractLocationPath(const std::string& line)
     std::string keyword, path;
     iss >> keyword >> path;
     return path;
+}
+
+bool ServerConfig::isValidIP(const std::string& ip) const
+{
+    int segments = 0;  // Nombre de segments dans l'adresse
+    int value = 0;     // Valeur numérique de chaque segment
+    int charCount = 0; // Nombre de caractères dans un segment
+
+    for (size_t i = 0; i < ip.size(); ++i)
+    {
+        char c = ip[i];
+
+        if (c == '.')
+        {
+            if (charCount == 0 || value > 255)
+                return false; // Segment vide ou valeur trop grande
+            segments++;
+            value = 0;
+            charCount = 0;
+        }
+        else if (c >= '0' && c <= '9')
+        {
+            value = value * 10 + (c - '0');
+            charCount++;
+            if (charCount > 3 || value > 255)
+                return false; // Plus de 3 chiffres ou valeur trop grande
+        }
+        else
+            return false; // Caractère non valide
+    }
+
+    // Vérifie le dernier segment
+    if (segments != 3 || charCount == 0 || value > 255) {
+        return false;
+    }
+
+    return true;
 }
 
 bool ServerConfig::parseConfigFile(const std::string& filepath)
@@ -199,6 +249,22 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
         name.resize(name.size() - 1);
         setServerName(name);
     }
+    else if (token == "host")
+    {
+        std::string hostValue;
+        iss >> hostValue;
+        hostValue.resize(hostValue.size() - 1); // Suppression de caractères de fin comme ';'
+        if (hostValue.empty()) {
+            std::cerr << "Host value is missing in configuration." << std::endl;
+            return false;
+        }
+        try {
+            setHost(hostValue);
+        } catch (const std::invalid_argument& e) {
+            std::cerr << "Error in configuration file: " << e.what() << std::endl;
+            return false;
+        }
+    }
     return true;
 }
 
@@ -299,6 +365,7 @@ void ServerConfig::display() const
 
     std::cout << "Root: " << root << std::endl;
     std::cout << "Index: " << index << std::endl;
+    std::cout << "Host: " << _host << std::endl;
 
     std::cout << "Error Pages:\n";
     for (std::map<int, std::string>::const_iterator it = error_pages.begin(); it != error_pages.end(); ++it)
