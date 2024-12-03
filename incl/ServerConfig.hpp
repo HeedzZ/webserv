@@ -46,6 +46,7 @@ public:
     void addLocation(const ServerLocation& location);
     const std::vector<ServerLocation>& getLocations() const;
 
+     bool parseLine(const std::string& line, int& serverIndex);
     bool isValidIP(const std::string& ip) const;
     void display() const;
 	bool parseConfigFile(const std::string& filepath);

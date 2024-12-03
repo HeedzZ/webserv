@@ -91,6 +91,22 @@ std::string ServerConfig::extractLocationPath(const std::string& line)
     return path;
 }
 
+bool ServerConfig::parseLine(const std::string& line, int& serverIndex) {
+        // Vérifier si la ligne démarre un nouveau bloc "server"
+    if (line.find("server {") != std::string::npos) {
+        serverIndex++; // Incrémenter l'index du serveur
+        return true;   // Indiquer qu'un nouveau serveur a été trouvé
+    }
+
+    // Vérifier si la ligne est une accolade fermante "}"
+    if (line.find("}") != std::string::npos) {
+        return true;   // Indiquer la fin d'un bloc de serveur
+    }
+
+    // Ignorer toutes les autres lignes
+    return true;
+}
+
 bool ServerConfig::isValidIP(const std::string& ip) const
 {
     int segments = 0;  // Nombre de segments dans l'adresse

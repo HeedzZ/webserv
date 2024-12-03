@@ -27,13 +27,45 @@ volatile sig_atomic_t Server::signal_received = 0;
 Server::Server(const std::string& configFile) : running(false)
 {
     logMessage("INFO", "Initializing the server...");
-    if (!_config.parseConfigFile(configFile))
-        throw std::runtime_error(logMessageError("ERROR", "Failed to parse configuration file."));
-    logMessage("INFO", "Configuration file parsed successfully.");
-    _ports = _config.getPorts();
-    //_config.display();
-    initSockets();
+    
+    std::ifstream file(configFile.c_str());
+    if (!file.is_open()) {
+        throw std::runtime_error(logMessageError("ERROR", "Could not open configuration file."));
+    }
+
+    std::string line;
+    int serverIndex = 0; // Compteur pour les serveurs
+
+    try {
+        while (std::getline(file, line)) {
+            // Nettoyer la ligne des espaces ou caractères inutiles
+            line = line.empty() ? line : line.substr(0, line.find_last_not_of(" \t") + 1);
+            
+            // Journalisation pour débogage
+            logMessage("DEBUG", "Processing line: " + line);
+
+            // Vérifier si la ligne contient "server {"
+            if (line.find("server {") != std::string::npos) {
+                serverIndex++; // Incrémenter le compteur de serveurs
+
+                // Conversion de `serverIndex` en chaîne
+                std::ostringstream ss;
+                ss << serverIndex;
+                logMessage("DEBUG", "Found a new server block. Total servers: " + ss.str());
+            }
+        }
+    } catch (const std::exception& e) {
+        throw std::runtime_error(logMessageError("ERROR", std::string("Failed to parse configuration: ") + e.what()));
+    }
+
+    file.close();
+
+    // Conversion de `serverIndex` pour journalisation finale
+    std::ostringstream ss;
+    ss << serverIndex;
+    logMessage("INFO", "Total server blocks found: " + ss.str());
 }
+
 
 // Destructor
 Server::~Server()
@@ -244,7 +276,7 @@ void Server::handleClientRequest(int clientIndex)
     if (buffer.empty()) return;
 
     HttpRequest request(buffer);
-    std::string response = request.handleRequest(_config);
+    std::string response = request.handleRequest(_configs[0]); /////////////////////////////////////// modif
 
     logResponseDetails(response, request.getPath());
     send(client_fd, response.c_str(), response.size(), 0);
