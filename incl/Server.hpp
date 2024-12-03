@@ -48,7 +48,10 @@ public:
     void logMessage(const std::string& level, const std::string& message) const;
     std::string logMessageError(const std::string& level, const std::string& message) const;
 
+    ServerConfig* getConfigForSocket(int socket);
+
 private:
+    bool parseConfigFile(const std::string& configFile);
     // Helpers pour les sockets
     int createSocket();
     void configureSocket(int server_fd);

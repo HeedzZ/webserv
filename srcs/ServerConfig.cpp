@@ -1,7 +1,7 @@
 #include "ServerConfig.hpp"
 #include <iostream>
 
-ServerConfig::ServerConfig() : root("./www/main"), index("index.html"), _host("127.0.0.1"), _hasListen(false), _hasRoot(false)
+ServerConfig::ServerConfig() : root("./www/main"), index("index.html"), _host("127.0.0.1"), _hasListen(false), _hasRoot(false), _valid(true)
 {}
 
 void ServerConfig::setPort(int serverPort)
@@ -91,6 +91,11 @@ std::string ServerConfig::extractLocationPath(const std::string& line)
     return path;
 }
 
+int	ServerConfig::getValid() const
+{
+    return _valid;
+}
+
 bool ServerConfig::parseLine(const std::string& line, int& serverIndex) {
         // Vérifier si la ligne démarre un nouveau bloc "server"
     if (line.find("server {") != std::string::npos) {
@@ -144,67 +149,57 @@ bool ServerConfig::isValidIP(const std::string& ip) const
     return true;
 }
 
-bool ServerConfig::parseConfigFile(const std::string& filepath)
+ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
 {
-    std::ifstream configFile(filepath.c_str());
-    if (!configFile.is_open())
-    {
-        std::cerr << "Could not open the file: " << filepath << std::endl;
-        return false;
-    }
-
     std::string line;
     ServerLocation* currentLocation = NULL;
     bool inLocationBlock = false;
-    try
+
+    while (std::getline(filepath, line))
     {
-        while (std::getline(configFile, line))
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        std::string token;
+        std::istringstream iss(line);
+        iss >> token;
+
+        if (token == "server" && line.find('{') != std::string::npos)
+            continue;
+
+        if (!inLocationBlock)
         {
-            if (line.empty() || line[0] == '#')
-                continue;
-
-            std::string token;
-            std::istringstream iss(line);
-            iss >> token;
-
-            if (token == "server" && line.find('{') != std::string::npos)
-                continue;
-
-            if (!inLocationBlock)
+            if (processServerOrLocation(token, iss, line, currentLocation, inLocationBlock) == false)
             {
-                if (processServerOrLocation(token, iss, line, currentLocation, inLocationBlock) == false)
-                    return false;
+                throw std::runtime_error("Invalid directive in location block");
+                return NULL; // Retourne NULL en cas d'erreur
+            }
+        }
+        else
+        {
+            if (token == "}")
+            {
+                if (currentLocation != NULL)
+                {
+                    locations.push_back(*currentLocation);
+                    delete currentLocation;
+                }
+                else
+                {
+                    if (!_hasListen || !_hasRoot)
+                        throw std::runtime_error("Missing/invalid essential configuration parameters.");
+                    return this; // Retourne un pointeur vers l'instance actuelle
+                }
             }
             else
             {
-                if (token == "}")
-                {
-                    if (currentLocation != NULL)
-                    {
-                        locations.push_back(*currentLocation);
-                        delete currentLocation;
-                    }
-                    inLocationBlock = false;
-                }
-                else
-                    parseLocationDirective(token, line, currentLocation, inLocationBlock);
+                parseLocationDirective(token, line, currentLocation, inLocationBlock);
             }
         }
     }
-    catch (const std::runtime_error& e)
-    {
-        std::cerr << "Configuration error: " << e.what() << std::endl;
-        delete currentLocation;
-        return false;
-    }
-
-    if (!_hasListen || !_hasRoot)
-    {
-        std::cerr << "Missing/invalid essential configuration parameters." << std::endl;
-        return false;
-    }
-    return true;
+    return NULL; // Retourne un pointeur vers l'instance actuelle
 }
+
 
 
 bool ServerConfig::processServerOrLocation(const std::string& token, std::istringstream& iss, const std::string& line, ServerLocation*& currentLocation, bool& inLocationBlock)
@@ -216,7 +211,7 @@ bool ServerConfig::processServerOrLocation(const std::string& token, std::istrin
         {
             if (it->getPath() == locationPath)
             {
-                std::cerr << "Duplicate location path: " << locationPath << std::endl;
+                throw std::runtime_error("Duplicate location path");
                 return false;
             }
         }
@@ -239,7 +234,7 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
         int port;
         if (!(iss >> port) || port < 1 || port > 65535)
         {
-            std::cerr << "Invalid or missing port in configuration." << std::endl;
+            throw std::runtime_error("Invalid or missing port in configuration.");
             return false;
         }
         setPort(port);
@@ -271,15 +266,15 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
         iss >> hostValue;
         hostValue.resize(hostValue.size() - 1); // Suppression de caractères de fin comme ';'
         if (hostValue.empty()) {
-            std::cerr << "Host value is missing in configuration." << std::endl;
+            throw std::runtime_error("Host value is missing in configuration.");
             return false;
         }
-        try {
-            setHost(hostValue);
-        } catch (const std::invalid_argument& e) {
-            std::cerr << "Error in configuration file: " << e.what() << std::endl;
+        if (!isValidIP(hostValue))
+        {
+            throw std::runtime_error("Host value is missing in configuration.");
             return false;
         }
+        _host = hostValue;
     }
     return true;
 }
@@ -291,7 +286,7 @@ bool ServerConfig::parseRootDirective(std::istringstream& iss, int& hasRoot)
     rootPath.resize(rootPath.size() - 1);
     if (rootPath.empty())
     {
-        std::cerr << "Root path is missing in configuration." << std::endl;
+        throw std::runtime_error("Root path is missing in configuration.");
         return false;
     }
     setRoot(rootPath);
@@ -307,13 +302,13 @@ bool ServerConfig::parseErrorPageDirective(std::istringstream& iss)
     path.resize(path.size() - 1);
     if (path.empty())
     {
-        std::cerr << "Error page path is missing or invalid." << std::endl;
+        throw std::runtime_error("Error page path is missing or invalid.");
         return false;
     }
     std::ifstream testFile(path.c_str());
     if (!testFile.is_open())
     {
-        std::cerr << "Error page file does not exist: " << path << std::endl;
+        throw std::runtime_error("Error page file does not exist");
         return false;
     }
     testFile.close();
@@ -326,8 +321,8 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
     if (token == "server_name" || token == "listen")
     {
         std::cerr << "Directive '" << token << "' is not allowed inside a location block." << std::endl;
+        throw std::runtime_error("Invalide Directive");
         inLocationBlock = false;
-        throw std::runtime_error("Invalid directive in location block");
     }
     if (token == "root")
     {
@@ -337,10 +332,7 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
 
         std::ifstream testFile(rootValue.c_str());
         if (!testFile.is_open())
-        {
-            std::cerr << "The specified root directory does not exist: " << rootValue << std::endl;
-            throw std::runtime_error("Root directory does not exist");
-        }
+            throw std::runtime_error("The specified root directory does not exist");
     }
     else if (token == "index")
         parseIndexDirective(line, currentLocation);
@@ -359,10 +351,7 @@ void ServerConfig::parseIndexDirective(const std::string& line, ServerLocation* 
 
     std::ifstream testFile(fullPath.c_str());
     if (!testFile.is_open())
-    {
-        std::cerr << "The specified index file does not exist: " << fullPath << std::endl;
-        throw std::runtime_error("Index file does not exist");
-    }
+        throw std::runtime_error("The specified index file does not exist");
 }
 
 void ServerConfig::display() const
@@ -396,5 +385,6 @@ void ServerConfig::display() const
         std::cout << "-----------------------\n";
     }
 }
+
 
 
