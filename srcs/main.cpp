@@ -27,17 +27,6 @@ void signalHandlerWrapper(int signal)
     }
 }
 
-/*void logMessage(const std::string& level, const std::string& message) const
-{
-    std::time_t now = std::time(NULL);
-    std::tm* localTime = std::localtime(&now);
-
-    char timeBuffer[20];
-    std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", localTime);
-
-    std::cout << "[" << level << "] " << timeBuffer << " - " << message << std::endl;
-}*/
-
 int main(int argc, char* argv[])
 {
     (void) argc;
@@ -47,7 +36,7 @@ int main(int argc, char* argv[])
         
         std::signal(SIGINT, signalHandlerWrapper);
         
-        server.run();
+        //server.run();
     }
     catch (const std::exception& e)
     {

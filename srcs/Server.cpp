@@ -27,44 +27,43 @@ volatile sig_atomic_t Server::signal_received = 0;
 Server::Server(const std::string& configFile) : running(false)
 {
     logMessage("INFO", "Initializing the server...");
+    parseConfigFile(configFile);
+
+    if (_configs.empty())
+        throw std::runtime_error("No valid server configurations found.");
     
-    std::ifstream file(configFile.c_str());
-    if (!file.is_open()) {
-        throw std::runtime_error(logMessageError("ERROR", "Could not open configuration file."));
-    }
-
-    std::string line;
-    int serverIndex = 0; // Compteur pour les serveurs
-
-    try {
-        while (std::getline(file, line)) {
-            // Nettoyer la ligne des espaces ou caractères inutiles
-            line = line.empty() ? line : line.substr(0, line.find_last_not_of(" \t") + 1);
-            
-            // Journalisation pour débogage
-            logMessage("DEBUG", "Processing line: " + line);
-
-            // Vérifier si la ligne contient "server {"
-            if (line.find("server {") != std::string::npos) {
-                serverIndex++; // Incrémenter le compteur de serveurs
-
-                // Conversion de `serverIndex` en chaîne
-                std::ostringstream ss;
-                ss << serverIndex;
-                logMessage("DEBUG", "Found a new server block. Total servers: " + ss.str());
-            }
-        }
-    } catch (const std::exception& e) {
-        throw std::runtime_error(logMessageError("ERROR", std::string("Failed to parse configuration: ") + e.what()));
-    }
-
-    file.close();
-
-    // Conversion de `serverIndex` pour journalisation finale
-    std::ostringstream ss;
-    ss << serverIndex;
-    logMessage("INFO", "Total server blocks found: " + ss.str());
+    initSockets();
 }
+
+bool Server::parseConfigFile(const std::string& configFile)
+{
+    std::ifstream file(configFile.c_str());
+    if (!file.is_open())
+    {
+        std::cerr << "Could not open the file: " << configFile << std::endl;
+        return false;
+    }
+
+    while (1)
+    {
+        try
+        {
+            ServerConfig* currentConfig = new ServerConfig();
+            currentConfig = currentConfig->parseServerBlock(file);
+            if (currentConfig != NULL)
+                _configs.push_back(*currentConfig);
+            delete currentConfig;
+        }
+        catch (const std::runtime_error& e)
+        {
+            std::cerr << "Configuration error: " << e.what() << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
+
 
 
 // Destructor
@@ -118,14 +117,22 @@ std::string Server::intToString(int value)
 // Initialize sockets
 void Server::initSockets()
 {
-    for (size_t i = 0; i < _ports.size(); ++i)
+    for (size_t i = 0; i < _configs.size(); ++i)
     {
-        int server_fd = createSocket();
-        configureSocket(server_fd);
-        bindSocket(server_fd, _ports[i]);
-        listenOnSocket(server_fd);
-        addServerSocketToPoll(server_fd);
+        const std::vector<int>& ports = _configs[i].getPorts();
+        for (size_t j = 0; j < ports.size(); ++j)
+        {
+            int server_fd = createSocket();
+            configureSocket(server_fd);
+            bindSocket(server_fd, ports[j]);
+            listenOnSocket(server_fd);
+            addServerSocketToPoll(server_fd);
+
+            // Log pour vérifier l'ajout du socket
+            logMessage("DEBUG", "Socket added to _poll_fds for port: " + intToString(ports[j]));
+        }
     }
+    logMessage("DEBUG", "_poll_fds size after initialization: " + intToString(_poll_fds.size()));
 }
 
 // Create a socket
@@ -190,6 +197,21 @@ void Server::addServerSocketToPoll(int server_fd)
     logMessage("INFO", "Server is listening on port " + intToString(ntohs(_addresses.back().sin_port)) + ".");
 }
 
+ServerConfig* Server::getConfigForSocket(int socket)
+{
+    for (size_t i = 0; i < _configs.size(); ++i)
+    {
+        const std::vector<int>& ports = _configs[i].getPorts();
+        for (size_t j = 0; j < ports.size(); ++j)
+        {
+            if (socket == _server_fds[j])
+                return &_configs[i];
+        }
+    }
+    return NULL; // Aucun match trouvé
+}
+
+
 // Clean up all sockets
 void Server::cleanupSockets()
 {
@@ -210,13 +232,22 @@ void Server::run()
 {
     logMessage("INFO", "Server is running...");
     running = true;
+
     while (running)
     {
+        logMessage("DEBUG", "Waiting for events on sockets...");
         int poll_count = poll(&_poll_fds[0], _poll_fds.size(), -1);
+
         if (poll_count < 0)
         {
-            if (!running) break; // Server stopped
-            logMessage("ERROR", "Poll failed.");
+            logMessage("ERROR", "Poll failed with error: " + std::string(strerror(errno)));
+            if (!running) break;
+            continue;
+        }
+
+        if (poll_count == 0)
+        {
+            logMessage("DEBUG", "Poll timeout expired (should not happen with -1 timeout).");
             continue;
         }
 
@@ -226,12 +257,12 @@ void Server::run()
             {
                 if (isServerSocket(_poll_fds[i].fd))
                 {
-                    logMessage("INFO", "New connection detected.");
+                    logMessage("INFO", "New connection detected on socket: " + intToString(_poll_fds[i].fd));
                     handleNewConnection(_poll_fds[i].fd);
                 }
                 else
                 {
-                    logMessage("INFO", "Client request detected.");
+                    logMessage("INFO", "Client request detected on socket: " + intToString(_poll_fds[i].fd));
                     handleClientRequest(i);
                 }
             }
@@ -239,6 +270,7 @@ void Server::run()
     }
     logMessage("INFO", "Server stopped.");
 }
+
 
 // Check if a file descriptor is a server socket
 bool Server::isServerSocket(int fd) const
@@ -267,7 +299,6 @@ void Server::handleNewConnection(int server_fd)
     logMessage("INFO", "New connection accepted.");
 }
 
-// Handle a client request
 void Server::handleClientRequest(int clientIndex)
 {
     int client_fd = _poll_fds[clientIndex].fd;
@@ -276,11 +307,21 @@ void Server::handleClientRequest(int clientIndex)
     if (buffer.empty()) return;
 
     HttpRequest request(buffer);
-    std::string response = request.handleRequest(_configs[0]); /////////////////////////////////////// modif
 
+    // Associer la bonne configuration
+    ServerConfig* config = getConfigForSocket(client_fd);
+    if (!config)
+    {
+        logMessage("ERROR", "No configuration found for this client.");
+        removeClient(clientIndex);
+        return;
+    }
+
+    std::string response = request.handleRequest(*config);
     logResponseDetails(response, request.getPath());
     send(client_fd, response.c_str(), response.size(), 0);
 }
+
 
 // Log details of the response
 void Server::logResponseDetails(const std::string& response, const std::string& path)

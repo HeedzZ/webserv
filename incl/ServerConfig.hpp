@@ -19,7 +19,7 @@ private:
     std::string                     _host;
     int                            _hasListen;
     int                            _hasRoot;
-
+    int                            _valid;
 public:
     // Default constructor
     ServerConfig();
@@ -46,10 +46,12 @@ public:
     void addLocation(const ServerLocation& location);
     const std::vector<ServerLocation>& getLocations() const;
 
+	int	getValid() const;
+
      bool parseLine(const std::string& line, int& serverIndex);
     bool isValidIP(const std::string& ip) const;
     void display() const;
-	bool parseConfigFile(const std::string& filepath);
+	ServerConfig* parseServerBlock(std::ifstream& filepath);
     void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);
     bool parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot);
     bool processServerOrLocation(const std::string& token, std::istringstream& iss, const std::string& line, ServerLocation*& currentLocation, bool& inLocationBlock);
