@@ -163,14 +163,18 @@ void Server::initSockets()
             configureSocket(server_fd);
             bindSocket(server_fd, ports[j]);
             listenOnSocket(server_fd);
+
+            // Associez ce socket à la configuration correspondante
+            _socketToConfig[server_fd] = &_configs[i];
+
+            // Ajoutez le socket à poll
             addServerSocketToPoll(server_fd);
 
-            // Log pour vérifier l'ajout du socket
-            logMessage("DEBUG", "Socket added to _poll_fds for port: " + intToString(ports[j]));
+            logMessage("INFO", "Server is listening on port: " + intToString(ports[j]));
         }
     }
-    logMessage("DEBUG", "_poll_fds size after initialization: " + intToString(_poll_fds.size()));
 }
+
 
 // Create a socket
 int Server::createSocket()
@@ -236,17 +240,11 @@ void Server::addServerSocketToPoll(int server_fd)
 
 ServerConfig* Server::getConfigForSocket(int socket)
 {
-    for (size_t i = 0; i < _configs.size(); ++i)
-    {
-        const std::vector<int>& ports = _configs[i].getPorts();
-        for (size_t j = 0; j < ports.size(); ++j)
-        {
-            if (socket == _server_fds[j])
-                return &_configs[i];
-        }
-    }
+    if (_socketToConfig.find(socket) != _socketToConfig.end())
+        return _socketToConfig[socket];
     return NULL; // Aucun match trouvé
 }
+
 
 
 // Clean up all sockets
@@ -333,8 +331,22 @@ void Server::handleNewConnection(int server_fd)
     client_poll_fd.events = POLLIN;
 
     _poll_fds.push_back(client_poll_fd);
+
+    // Associez le socket client à la configuration du socket serveur (server_fd)
+    ServerConfig* config = _socketToConfig[server_fd];
+    if (config)
+    {
+        _socketToConfig[client_fd] = config; // Associez le client au même config que le serveur
+        logMessage("INFO", "New connection associated with server configuration.");
+    }
+    else
+    {
+        logMessage("WARNING", "Could not find server configuration for client.");
+    }
+
     logMessage("INFO", "New connection accepted.");
 }
+
 
 void Server::handleClientRequest(int clientIndex)
 {
@@ -345,7 +357,7 @@ void Server::handleClientRequest(int clientIndex)
 
     HttpRequest request(buffer);
 
-    // Associer la bonne configuration
+    // Trouver la configuration associée
     ServerConfig* config = getConfigForSocket(client_fd);
     if (!config)
     {
@@ -358,6 +370,7 @@ void Server::handleClientRequest(int clientIndex)
     logResponseDetails(response, request.getPath());
     send(client_fd, response.c_str(), response.size(), 0);
 }
+
 
 
 // Log details of the response
@@ -415,14 +428,19 @@ std::string Server::readClientRequest(int client_fd, int clientIndex)
 // Remove a client from the poll array
 void Server::removeClient(int index)
 {
-    if (_poll_fds[index].fd != -1)
+    int client_fd = _poll_fds[index].fd;
+
+    if (_socketToConfig.find(client_fd) != _socketToConfig.end())
+        _socketToConfig.erase(client_fd); // Supprimez l'association
+
+    if (client_fd != -1)
     {
-        logMessage("INFO", "Disconnecting client with descriptor " + intToString(_poll_fds[index].fd) + ".");
-        close(_poll_fds[index].fd);
-        _poll_fds[index].fd = -1;
+        logMessage("INFO", "Disconnecting client with descriptor " + intToString(client_fd) + ".");
+        close(client_fd);
     }
     _poll_fds.erase(_poll_fds.begin() + index);
 }
+
 
 // Stop the server
 void Server::stop()

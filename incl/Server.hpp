@@ -81,6 +81,7 @@ private:
     std::vector<sockaddr_in> _addresses; // Adresses des sockets
     std::vector<pollfd> _poll_fds;     // Liste des descripteurs pour poll
     std::vector<ServerConfig> _configs;
+    std::map<int, ServerConfig*> _socketToConfig;
 
     // Variable statique pour gérer les signaux
     static volatile sig_atomic_t signal_received;
