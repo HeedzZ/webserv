@@ -28,11 +28,25 @@ Server::Server(const std::string& configFile) : running(false)
 {
     logMessage("INFO", "Initializing the server...");
     parseConfigFile(configFile);
-
-    if (_configs.empty())
-        throw std::runtime_error("No valid server configurations found.");
-    
     initSockets();
+}
+
+void displayConfigs(const std::vector<ServerConfig>& configs)
+{
+    std::cout << "==== Displaying Server Configurations ====" << std::endl;
+
+    if (configs.empty())
+    {
+        std::cout << "No configurations found." << std::endl;
+        return;
+    }
+
+    for (size_t i = 0; i < configs.size(); ++i)
+    {
+        std::cout << "Configuration #" << i + 1 << ":" << std::endl;
+        std::cout << configs[i].toString() << std::endl;
+        std::cout << "-----------------------------------------" << std::endl;
+    }
 }
 
 bool Server::parseConfigFile(const std::string& configFile)
@@ -43,23 +57,46 @@ bool Server::parseConfigFile(const std::string& configFile)
         std::cerr << "Could not open the file: " << configFile << std::endl;
         return false;
     }
-
-    while (1)
+    try
     {
-        try
+        while (file.peek() != EOF)
         {
+            std::string line;
+            while (std::getline(file, line))
+            {
+                line = line.substr(line.find_first_not_of(" \t"));
+                if (!line.empty() && line[0] != '#')
+                {
+                    file.seekg(-static_cast<int>(line.length()) - 1, std::ios_base::cur);
+                    break;
+                }
+            }
+
             ServerConfig* currentConfig = new ServerConfig();
-            currentConfig = currentConfig->parseServerBlock(file);
-            if (currentConfig != NULL)
+            if (currentConfig->parseServerBlock(file))
+            {
                 _configs.push_back(*currentConfig);
+            }
             delete currentConfig;
         }
-        catch (const std::runtime_error& e)
-        {
-            std::cerr << "Configuration error: " << e.what() << std::endl;
-            return false;
-        }
     }
+    catch (const std::runtime_error& e)
+    {
+        std::cerr << "Configuration error: " << e.what() << std::endl;
+        return false;
+    }
+    catch (...)
+    {
+        std::cerr << "Unexpected error while parsing configuration." << std::endl;
+        return false;
+    }
+
+    if (_configs.empty())
+    {
+        std::cerr << "No valid configuration blocks found in the file." << std::endl;
+        return false;
+    }
+    displayConfigs(_configs);
     return true;
 }
 

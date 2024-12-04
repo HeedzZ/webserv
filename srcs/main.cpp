@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
         
         std::signal(SIGINT, signalHandlerWrapper);
         
-        //server.run();
+        server.run();
     }
     catch (const std::exception& e)
     {

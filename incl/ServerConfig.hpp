@@ -47,8 +47,8 @@ public:
     const std::vector<ServerLocation>& getLocations() const;
 
 	int	getValid() const;
+    std::string toString() const;
 
-     bool parseLine(const std::string& line, int& serverIndex);
     bool isValidIP(const std::string& ip) const;
     void display() const;
 	ServerConfig* parseServerBlock(std::ifstream& filepath);

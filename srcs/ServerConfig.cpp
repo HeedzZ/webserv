@@ -96,27 +96,22 @@ int	ServerConfig::getValid() const
     return _valid;
 }
 
-bool ServerConfig::parseLine(const std::string& line, int& serverIndex) {
-        // Vérifier si la ligne démarre un nouveau bloc "server"
-    if (line.find("server {") != std::string::npos) {
-        serverIndex++; // Incrémenter l'index du serveur
-        return true;   // Indiquer qu'un nouveau serveur a été trouvé
-    }
+std::string ServerConfig::toString() const
+{
+    std::ostringstream oss;
+        oss << "Root: " << root << "\n"
+        << "Index: " << index << "\n"
+        << "Server Name: " << _serverName << "\n";
 
-    // Vérifier si la ligne est une accolade fermante "}"
-    if (line.find("}") != std::string::npos) {
-        return true;   // Indiquer la fin d'un bloc de serveur
-    }
 
-    // Ignorer toutes les autres lignes
-    return true;
+    return oss.str();
 }
 
 bool ServerConfig::isValidIP(const std::string& ip) const
 {
-    int segments = 0;  // Nombre de segments dans l'adresse
-    int value = 0;     // Valeur numérique de chaque segment
-    int charCount = 0; // Nombre de caractères dans un segment
+    int segments = 0;  
+    int value = 0;     
+    int charCount = 0;
 
     for (size_t i = 0; i < ip.size(); ++i)
     {
@@ -125,7 +120,7 @@ bool ServerConfig::isValidIP(const std::string& ip) const
         if (c == '.')
         {
             if (charCount == 0 || value > 255)
-                return false; // Segment vide ou valeur trop grande
+                return false;
             segments++;
             value = 0;
             charCount = 0;
@@ -135,17 +130,13 @@ bool ServerConfig::isValidIP(const std::string& ip) const
             value = value * 10 + (c - '0');
             charCount++;
             if (charCount > 3 || value > 255)
-                return false; // Plus de 3 chiffres ou valeur trop grande
+                return false;
         }
         else
-            return false; // Caractère non valide
+            return false;
     }
-
-    // Vérifie le dernier segment
-    if (segments != 3 || charCount == 0 || value > 255) {
+    if (segments != 3 || charCount == 0 || value > 255)
         return false;
-    }
-
     return true;
 }
 
@@ -154,9 +145,12 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
     std::string line;
     ServerLocation* currentLocation = NULL;
     bool inLocationBlock = false;
+    bool inServerBlock = false;
+    int blockDepth = 0;
 
     while (std::getline(filepath, line))
     {
+        line = line.substr(line.find_first_not_of(" \t"));
         if (line.empty() || line[0] == '#')
             continue;
 
@@ -164,41 +158,69 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
         std::istringstream iss(line);
         iss >> token;
 
-        if (token == "server" && line.find('{') != std::string::npos)
-            continue;
-
-        if (!inLocationBlock)
+        if (!inServerBlock)
         {
-            if (processServerOrLocation(token, iss, line, currentLocation, inLocationBlock) == false)
+            if (token == "server")
             {
-                throw std::runtime_error("Invalid directive in location block");
-                return NULL; // Retourne NULL en cas d'erreur
+                size_t bracePos = line.find('{');
+                if (bracePos != std::string::npos)
+                {
+                    inServerBlock = true;
+                    blockDepth = 1;
+                    continue;
+                }
+                else
+                    throw std::runtime_error("Expected '{' after 'server'. Line: " + line);
             }
+            throw std::runtime_error("Expected 'server {' to start a server block. Line: " + line);
         }
-        else
+
+        if (token == "}")
         {
-            if (token == "}")
+            blockDepth--;
+            if (blockDepth == 0)
             {
+                if (!_hasListen || !_hasRoot)
+                    throw std::runtime_error("Missing essential configuration parameters (listen/root).");
+                return this;
+            }
+
+            if (inLocationBlock && blockDepth == 1)
+            {
+                inLocationBlock = false;
                 if (currentLocation != NULL)
                 {
                     locations.push_back(*currentLocation);
                     delete currentLocation;
+                    currentLocation = NULL;
                 }
-                else
-                {
-                    if (!_hasListen || !_hasRoot)
-                        throw std::runtime_error("Missing/invalid essential configuration parameters.");
-                    return this; // Retourne un pointeur vers l'instance actuelle
-                }
+                continue;
             }
-            else
-            {
-                parseLocationDirective(token, line, currentLocation, inLocationBlock);
-            }
+            continue;
         }
+
+        if (!inLocationBlock)
+        {
+            if (token == "location" && line.find('{') != std::string::npos)
+            {
+                inLocationBlock = true;
+                blockDepth++;
+                std::string locationPath;
+                iss >> locationPath;
+                currentLocation = new ServerLocation(locationPath);
+                continue;
+            }
+
+            if (!processServerOrLocation(token, iss, line, currentLocation, inLocationBlock))
+                throw std::runtime_error("Invalid directive in server block: " + line);
+        }
+        else
+            parseLocationDirective(token, line, currentLocation, inLocationBlock);
     }
-    return NULL; // Retourne un pointeur vers l'instance actuelle
+
+    throw std::runtime_error("Unexpected end of file. Missing '}' for server block.");
 }
+
 
 
 
