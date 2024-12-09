@@ -1,7 +1,7 @@
 #include "ServerConfig.hpp"
 #include <iostream>
 
-ServerConfig::ServerConfig() : root("var/www/main"), index("index.html"), _host("127.0.0.1"), _hasListen(false), _hasRoot(false), _valid(true)
+ServerConfig::ServerConfig() : root("./www/main"), index("index.html"), _host("127.0.0.1"), _hasListen(false), _hasRoot(false), _valid(true)
 {}
 
 void ServerConfig::setPort(int serverPort)
@@ -222,8 +222,6 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
 }
 
 
-
-
 bool ServerConfig::processServerOrLocation(const std::string& token, std::istringstream& iss, const std::string& line, ServerLocation*& currentLocation, bool& inLocationBlock)
 {
     if (token == "location")
@@ -330,7 +328,7 @@ bool ServerConfig::parseErrorPageDirective(std::istringstream& iss)
     std::ifstream testFile(path.c_str());
     if (!testFile.is_open())
     {
-        throw std::runtime_error("Error page file does not exist :" + path);
+        throw std::runtime_error("Error page file does not exist");
         return false;
     }
     testFile.close();
@@ -354,7 +352,7 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
 
         std::ifstream testFile(rootValue.c_str());
         if (!testFile.is_open())
-            throw std::runtime_error("The specified root directory does not exist" + rootValue);
+            throw std::runtime_error("The specified root directory does not exist");
     }
     else if (token == "index")
         parseIndexDirective(line, currentLocation);
@@ -369,11 +367,11 @@ void ServerConfig::parseIndexDirective(const std::string& line, ServerLocation* 
 
     currentLocation->setIndex(indexValue);
 
-    std::string fullPath = root + indexValue;
+    std::string fullPath = "html/" + indexValue;
 
     std::ifstream testFile(fullPath.c_str());
     if (!testFile.is_open())
-        throw std::runtime_error("The specified index file does not exist" + fullPath);
+        throw std::runtime_error("The specified index file does not exist");
 }
 
 void ServerConfig::display() const

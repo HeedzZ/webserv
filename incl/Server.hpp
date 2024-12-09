@@ -61,6 +61,7 @@ private:
     void listenOnSocket(int server_fd);
     void addServerSocketToPoll(int server_fd);
     void cleanupSockets();
+    void cleanup();
 
     // Gestion des connexions
     void handleNewConnection(int server_fd);

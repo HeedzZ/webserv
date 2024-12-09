@@ -27,8 +27,18 @@ volatile sig_atomic_t Server::signal_received = 0;
 Server::Server(const std::string& configFile) : running(false)
 {
     logMessage("INFO", "Initializing the server...");
-    parseConfigFile(configFile);
-    initSockets();
+    try
+    {
+        if (!parseConfigFile(configFile))
+            throw std::runtime_error("Failed to parse configuration file: " + configFile);
+        initSockets();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error during server initialization: " << e.what() << std::endl;
+        cleanup();
+        exit(EXIT_FAILURE); // Quitte proprement avec un code d'erreur
+    }
 }
 
 void displayConfigs(const std::vector<ServerConfig>& configs)
@@ -49,6 +59,12 @@ void displayConfigs(const std::vector<ServerConfig>& configs)
     }
 }
 
+void Server::cleanup()
+{
+    logMessage("INFO", "Cleaning up resources...");
+    _configs.clear();
+}
+
 bool Server::parseConfigFile(const std::string& configFile)
 {
     std::ifstream file(configFile.c_str());
@@ -57,27 +73,23 @@ bool Server::parseConfigFile(const std::string& configFile)
         std::cerr << "Could not open the file: " << configFile << std::endl;
         return false;
     }
+
     try
     {
         while (file.peek() != EOF)
         {
-            std::string line;
-            while (std::getline(file, line))
-            {
-                line = line.substr(line.find_first_not_of(" \t"));
-                if (!line.empty() && line[0] != '#')
-                {
-                    file.seekg(-static_cast<int>(line.length()) - 1, std::ios_base::cur);
-                    break;
-                }
-            }
-
             ServerConfig* currentConfig = new ServerConfig();
-            if (currentConfig->parseServerBlock(file))
+            try
             {
-                _configs.push_back(*currentConfig);
+                if (currentConfig->parseServerBlock(file))
+                    _configs.push_back(*currentConfig);
+                delete currentConfig;
             }
-            delete currentConfig;
+            catch (...)
+            {
+                delete currentConfig; // Nettoie en cas d'erreur
+                throw; // Relance l'exception
+            }
         }
     }
     catch (const std::runtime_error& e)
@@ -91,13 +103,7 @@ bool Server::parseConfigFile(const std::string& configFile)
         return false;
     }
 
-    if (_configs.empty())
-    {
-        std::cerr << "No valid configuration blocks found in the file." << std::endl;
-        return false;
-    }
-    displayConfigs(_configs);
-    return true;
+    return !_configs.empty();
 }
 
 
