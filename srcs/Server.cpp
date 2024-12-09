@@ -151,39 +151,70 @@ std::string Server::intToString(int value)
     return oss.str();
 }
 
+int Server::createSocket()
+{
+    // Crée un socket IPv4, orienté connexion, pour le protocole TCP
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (server_fd < 0)
+    {
+        throw std::runtime_error(logMessageError("ERROR", "Failed to create socket."));
+    }
+
+    logMessage("INFO", "Socket created successfully.");
+    return server_fd;
+}
+
+
 // Initialize sockets
 void Server::initSockets()
 {
     for (size_t i = 0; i < _configs.size(); ++i)
     {
         const std::vector<int>& ports = _configs[i].getPorts();
+        const std::string& host = _configs[i].getHost();
+
         for (size_t j = 0; j < ports.size(); ++j)
         {
             int server_fd = createSocket();
-            configureSocket(server_fd);
-            bindSocket(server_fd, ports[j]);
-            listenOnSocket(server_fd);
 
-            // Associez ce socket à la configuration correspondante
-            _socketToConfig[server_fd] = &_configs[i];
+            try {
+                configureSocket(server_fd);
 
-            // Ajoutez le socket à poll
-            addServerSocketToPoll(server_fd);
+                // Configure l'adresse et associe le socket à un port
+                sockaddr_in address = {};
+                address.sin_family = AF_INET;
+                address.sin_addr.s_addr = inet_addr(host.c_str()); // Adresse configurée dans le fichier
+                address.sin_port = htons(ports[j]);
 
-            logMessage("INFO", "Server is listening on port: " + intToString(ports[j]));
+                // Tente de lier le socket
+                if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0)
+                {
+                    close(server_fd);
+                    throw std::runtime_error(logMessageError("ERROR", "Failed to bind socket for host: " + host));
+                }
+
+                // Ajoute l'adresse au vecteur _addresses après un bind réussi
+                _addresses.push_back(address);
+
+                // Mets le socket en mode écoute
+                listenOnSocket(server_fd);
+
+                // Associe ce socket à la configuration correspondante
+                _socketToConfig[server_fd] = &_configs[i];
+
+                // Ajoute le socket à poll
+                addServerSocketToPoll(server_fd);
+
+                logMessage("INFO", "Server is listening on " + host + ":" + intToString(ports[j]));
+            } 
+            catch (const std::exception& e) {
+                close(server_fd); // Nettoyage en cas d'erreur
+                logMessage("ERROR", e.what());
+                continue;
+            }
         }
     }
-}
-
-
-// Create a socket
-int Server::createSocket()
-{
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0)
-        throw std::runtime_error(logMessageError("ERROR", "Failed to create socket."));
-    logMessage("INFO", "Socket created successfully.");
-    return server_fd;
 }
 
 // Configure socket options
@@ -245,7 +276,24 @@ ServerConfig* Server::getConfigForSocket(int socket)
     return NULL; // Aucun match trouvé
 }
 
+ServerConfig* Server::getConfigForRequest(const std::string& hostHeader) {
+    if (hostHeader.empty()) {
+        logMessage("WARNING", "Empty Host header received, using default configuration.");
+        return &_configs[0];
+    }
 
+    for (size_t i = 0; i < _configs.size(); ++i) {
+        const std::string& configHost = _configs[i].getHost();
+        const std::string& configServerName = _configs[i].getServerName();
+
+        if (hostHeader == configServerName || hostHeader == configHost) {
+            return &_configs[i];
+        }
+    }
+
+    logMessage("WARNING", "No matching configuration found for Host: " + hostHeader + ", using default.");
+    return &_configs[0];
+}
 
 // Clean up all sockets
 void Server::cleanupSockets()
@@ -292,7 +340,7 @@ void Server::run()
             {
                 if (isServerSocket(_poll_fds[i].fd))
                 {
-                    logMessage("INFO", "New connection detected on socket: " + intToString(_poll_fds[i].fd));
+                    //logMessage("INFO", "New connection detected on socket: " + intToString(_poll_fds[i].fd));
                     handleNewConnection(_poll_fds[i].fd);
                 }
                 else
@@ -301,6 +349,7 @@ void Server::run()
                     handleClientRequest(i);
                 }
             }
+            _poll_fds[i].revents = 0;
         }
     }
     logMessage("INFO", "Server stopped.");
@@ -348,8 +397,7 @@ void Server::handleNewConnection(int server_fd)
 }
 
 
-void Server::handleClientRequest(int clientIndex)
-{
+void Server::handleClientRequest(int clientIndex) {
     int client_fd = _poll_fds[clientIndex].fd;
 
     std::string buffer = readClientRequest(client_fd, clientIndex);
@@ -357,21 +405,28 @@ void Server::handleClientRequest(int clientIndex)
 
     HttpRequest request(buffer);
 
-    // Trouver la configuration associée
-    ServerConfig* config = getConfigForSocket(client_fd);
-    if (!config)
-    {
-        logMessage("ERROR", "No configuration found for this client.");
+    // Récupérer la configuration correspondant à la requête
+    std::string hostHeader = request.getHeaderValue("Host");
+    ServerConfig* config = getConfigForRequest(hostHeader);
+
+    if (!config) {
+        logMessage("ERROR", "No matching configuration found for Host: " + hostHeader);
         removeClient(clientIndex);
         return;
     }
 
+    // Traiter la requête
     std::string response = request.handleRequest(*config);
     logResponseDetails(response, request.getPath());
+
+    // Envoyer la réponse
     send(client_fd, response.c_str(), response.size(), 0);
+
+    // Vérifier si la connexion doit être fermée
+    if (request.getHeaderValue("Connection") != "keep-alive") {
+        removeClient(clientIndex); // Fermer la connexion
+    }
 }
-
-
 
 // Log details of the response
 void Server::logResponseDetails(const std::string& response, const std::string& path)

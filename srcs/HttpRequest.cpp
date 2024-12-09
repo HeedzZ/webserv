@@ -146,6 +146,13 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     std::string response = "HTTP/1.1 200 OK\r\n";
     response += "Content-Length: " + oss.str() + "\r\n";
     response += "Content-Type: " + getMimeType(fullPath) + "\r\n";
+
+    if (_headers["Connection"] == "keep-alive") {
+        response += "Connection: keep-alive\r\n";
+    } else {
+        response += "Connection: close\r\n";
+    }
+
     response += "\r\n";
     response += fileContent;
 
@@ -477,6 +484,15 @@ std::string HttpRequest::generateDefaultErrorPage(int errorCode)
 
     return httpResponse.str();
 }
+
+std::string HttpRequest::getHeaderValue(const std::string& headerName) const
+{
+    std::map<std::string, std::string>::const_iterator it = _headers.find(headerName);
+    if (it != _headers.end())
+        return it->second;
+    return "";
+}
+
 
 std::string HttpRequest::getPath() const
 {

@@ -26,6 +26,7 @@
 #include <csignal>
 #include <stdexcept>
 #include <fstream>
+#include <arpa/inet.h>
 #include "ServerConfig.hpp"
 
 class Server {
@@ -49,6 +50,7 @@ public:
     std::string logMessageError(const std::string& level, const std::string& message) const;
 
     ServerConfig* getConfigForSocket(int socket);
+    ServerConfig* getConfigForRequest(const std::string& hostHeader);
 
 private:
     bool parseConfigFile(const std::string& configFile);

@@ -44,6 +44,7 @@ public:
 	std::string getMimeType(const std::string& filePath);
 	std::string getPath() const;
 	std::string getMethod() const;
+	std::string getHeaderValue(const std::string& headerName) const;
 	std::string intToString(int value);
 	//Execute CGI fonctions :
 	void createPipes(int outputPipe[2], int inputPipe[2]);
