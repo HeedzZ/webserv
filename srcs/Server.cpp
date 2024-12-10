@@ -18,6 +18,7 @@
 #include <fstream>
 #include <algorithm>
 #include <ctime>
+#include <memory>
 #include <iomanip>
 
 // Initialize static variable
@@ -36,8 +37,8 @@ Server::Server(const std::string& configFile) : running(false)
     catch (const std::exception& e)
     {
         std::cerr << "Error during server initialization: " << e.what() << std::endl;
-        cleanup();
-        exit(EXIT_FAILURE); // Quitte proprement avec un code d'erreur
+        cleanup(); // Ensure resources are cleaned up
+        throw;     // Rethrow exception to `main()` for final handling
     }
 }
 
@@ -63,6 +64,7 @@ void Server::cleanup()
 {
     logMessage("INFO", "Cleaning up resources...");
     _configs.clear();
+    cleanupSockets();
 }
 
 bool Server::parseConfigFile(const std::string& configFile)
@@ -78,18 +80,10 @@ bool Server::parseConfigFile(const std::string& configFile)
     {
         while (file.peek() != EOF)
         {
-            ServerConfig* currentConfig = new ServerConfig();
-            try
-            {
-                if (currentConfig->parseServerBlock(file))
-                    _configs.push_back(*currentConfig);
-                delete currentConfig;
-            }
-            catch (...)
-            {
-                delete currentConfig; // Nettoie en cas d'erreur
-                throw; // Relance l'exception
-            }
+            // Use auto_ptr for exception safety in C++98
+            std::auto_ptr<ServerConfig> currentConfig(new ServerConfig());
+            if (currentConfig->parseServerBlock(file))
+                _configs.push_back(*currentConfig); // Copy to vector
         }
     }
     catch (const std::runtime_error& e)

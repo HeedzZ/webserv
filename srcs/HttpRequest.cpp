@@ -323,7 +323,7 @@ std::string HttpRequest::uploadTxt(ServerConfig& config, std::string response)
 
     if (fileName.empty() || fileContent.empty())
         return findErrorPage(config, 400);
-    std::string targetPath = "html/uploads/" + fileName;
+    std::string targetPath = "upload/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
@@ -350,7 +350,7 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     size_t contentStart = _body.find("\r\n\r\n", fileNameEndPos) + 4;
     size_t contentEnd = _body.find(boundary, contentStart) - 2;
     std::string fileContent = _body.substr(contentStart, contentEnd - contentStart);
-    std::string targetPath = "html/uploads/" + fileName;
+    std::string targetPath = "upload/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
