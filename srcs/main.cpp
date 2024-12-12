@@ -15,15 +15,15 @@ void signalHandlerWrapper(int signal)
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
-    {
-        std::cerr << "Usage: " << argv[0] << " <configuration file>" << std::endl;
-        return EXIT_FAILURE;
-    }
+    const char* configPath;
 
+    if (argc != 2)
+        configPath = "Configs/server.conf";
+    else
+        configPath = argv[1];
     try
     {
-        Server server(argv[1]);
+        Server server(configPath);
         globalServerPointer = &server;
 
         std::signal(SIGINT, signalHandlerWrapper);

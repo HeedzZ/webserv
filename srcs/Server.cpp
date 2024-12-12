@@ -32,33 +32,17 @@ Server::Server(const std::string& configFile) : running(false)
     {
         if (!parseConfigFile(configFile))
             throw std::runtime_error("Failed to parse configuration file: " + configFile);
-		initSockets();
+        validateServerConfigurations();
+        initSockets();
     }
     catch (const std::exception& e)
     {
         std::cerr << "Error during server initialization: " << e.what() << std::endl;
-        cleanup(); // Ensure resources are cleaned up
-        throw;     // Rethrow exception to `main()` for final handling
+        cleanup();
+        throw;
     }
 }
 
-void displayConfigs(const std::vector<ServerConfig>& configs)
-{
-    std::cout << "==== Displaying Server Configurations ====" << std::endl;
-
-    if (configs.empty())
-    {
-        std::cout << "No configurations found." << std::endl;
-        return;
-    }
-
-    for (size_t i = 0; i < configs.size(); ++i)
-    {
-        std::cout << "Configuration #" << i + 1 << ":" << std::endl;
-        std::cout << configs[i].toString() << std::endl;
-        std::cout << "-----------------------------------------" << std::endl;
-    }
-}
 
 void Server::cleanup()
 {
@@ -80,10 +64,9 @@ bool Server::parseConfigFile(const std::string& configFile)
     {
         while (file.peek() != EOF)
         {
-            // Use auto_ptr for exception safety in C++98
             std::auto_ptr<ServerConfig> currentConfig(new ServerConfig());
             if (currentConfig->parseServerBlock(file))
-                _configs.push_back(*currentConfig); // Copy to vector
+                _configs.push_back(*currentConfig);
         }
     }
     catch (const std::runtime_error& e)
@@ -100,8 +83,45 @@ bool Server::parseConfigFile(const std::string& configFile)
     return !_configs.empty();
 }
 
+void Server::validateServerConfigurations()
+{
+    for (size_t i = 0; i < _configs.size(); ++i)
+    {
+        const std::string& host1 = _configs[i].getHost();
+        const std::vector<int>& ports1 = _configs[i].getPorts();
+        const std::string& serverName1 = _configs[i].getServerName();
 
+        for (size_t j = i + 1; j < _configs.size(); ++j)
+        {
+            const std::string& host2 = _configs[j].getHost();
+            const std::vector<int>& ports2 = _configs[j].getPorts();
+            const std::string& serverName2 = _configs[j].getServerName();
 
+            for (size_t p1 = 0; p1 < ports1.size(); ++p1)
+            {
+                for (size_t p2 = 0; p2 < ports2.size(); ++p2)
+                {
+                    if (ports1[p1] == ports2[p2] && host1 == host2)
+                    {
+                        if (serverName1.empty() && serverName2.empty())
+                        {
+                            throw std::runtime_error(
+                                "Configuration error: Multiple servers on the same host (" +
+                                host1 + ") and port (" + intToString(ports1[p1]) +
+                                ") without server_name.");
+                        }
+                        if (!serverName1.empty() && !serverName2.empty() && serverName1 == serverName2)
+                        {
+                            throw std::runtime_error(
+                                "Configuration error: Duplicate server_name (" + serverName1 +
+                                ") on the same host (" + host1 + ") and port (" + intToString(ports1[p1]) + ").");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 // Destructor
 Server::~Server()
@@ -454,7 +474,8 @@ void Server::handleNewConnection(int server_fd)
 }
 
 
-void Server::handleClientRequest(int clientIndex) {
+void Server::handleClientRequest(int clientIndex)
+{
     int client_fd = _poll_fds[clientIndex].fd;
 
     // Lire la requête du client
@@ -490,9 +511,8 @@ void Server::handleClientRequest(int clientIndex) {
         return;
     }
 
-    // Traiter la requête
+    // Vérifier si la méthode est autorisée
     std::string response = request.handleRequest(*config);
-    logResponseDetails(response, request.getPath());
 
     // Envoyer la réponse au client
     send(client_fd, response.c_str(), response.size(), 0);
@@ -540,6 +560,7 @@ std::string Server::readClientRequest(int client_fd, int clientIndex)
     {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
+        std::cout << buffer << std::endl;
         if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
     }
@@ -586,4 +607,22 @@ void Server::signalHandler(int signal)
 {
     if (signal == SIGINT)
         signal_received = 1;
+}
+
+void Server::displayConfigs(const std::vector<ServerConfig>& configs)
+{
+    std::cout << "==== Displaying Server Configurations ====" << std::endl;
+
+    if (configs.empty())
+    {
+        std::cout << "No configurations found." << std::endl;
+        return;
+    }
+
+    for (size_t i = 0; i < configs.size(); ++i)
+    {
+        std::cout << "Configuration #" << i + 1 << ":" << std::endl;
+        std::cout << configs[i].toString() << std::endl;
+        std::cout << "-----------------------------------------" << std::endl;
+    }
 }
