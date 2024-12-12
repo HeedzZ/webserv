@@ -101,6 +101,7 @@ std::string HttpRequest::resolveFilePath(const ServerConfig& config)
 
 bool HttpRequest::isFileAccessible(const std::string& filePath)
 {
+    std::cout << filePath << std::endl;
     struct stat fileStat;
     if (stat(filePath.c_str(), &fileStat) != 0)
         return false;
@@ -489,7 +490,13 @@ std::string HttpRequest::getHeaderValue(const std::string& headerName) const
 {
     std::map<std::string, std::string>::const_iterator it = _headers.find(headerName);
     if (it != _headers.end())
-        return it->second;
+    {
+        std::string value = it->second;
+        if (!value.empty() && (value[value.size() - 1] == '\n' || value[value.size() - 1] == '\r')) {
+            value.erase(value.size() - 1);
+        }
+        return value;
+    }
     return "";
 }
 

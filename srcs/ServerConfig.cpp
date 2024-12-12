@@ -16,7 +16,7 @@ void ServerConfig::setServerName(const std::string& name)
 
 
 const std::string& ServerConfig::getServerName(void)
-{
+{ 
     return _serverName;
 }
 

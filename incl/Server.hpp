@@ -50,7 +50,7 @@ public:
     std::string logMessageError(const std::string& level, const std::string& message) const;
 
     ServerConfig* getConfigForSocket(int socket);
-    ServerConfig* getConfigForRequest(const std::string& hostHeader);
+    ServerConfig* getConfigForRequest(const std::string& hostHeader, int connectedPort);
 
 private:
     bool parseConfigFile(const std::string& configFile);

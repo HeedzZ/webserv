@@ -32,7 +32,7 @@ Server::Server(const std::string& configFile) : running(false)
     {
         if (!parseConfigFile(configFile))
             throw std::runtime_error("Failed to parse configuration file: " + configFile);
-        initSockets();
+		initSockets();
     }
     catch (const std::exception& e)
     {
@@ -169,13 +169,34 @@ int Server::createSocket()
 // Initialize sockets
 void Server::initSockets()
 {
-    for (size_t i = 0; i < _configs.size(); ++i)
-    {
+    for (size_t i = 0; i < _configs.size(); ++i) {
         const std::vector<int>& ports = _configs[i].getPorts();
         const std::string& host = _configs[i].getHost();
+        //const std::string& serverName = _configs[i].getServerName();
 
-        for (size_t j = 0; j < ports.size(); ++j)
-        {
+        for (size_t j = 0; j < ports.size(); ++j) {
+            // Vérifiez si une configuration avec le même host et port existe déjà sans server_name
+            bool configExists = false;
+
+            for (std::map<int, ServerConfig*>::iterator it = _socketToConfig.begin(); it != _socketToConfig.end(); ++it) {
+                ServerConfig* existingConfig = it->second;
+
+                // Comparer host et ports uniquement pour les configurations sans server_name
+                if (existingConfig->getServerName().empty() && 
+                    existingConfig->getHost() == host && 
+                    std::find(existingConfig->getPorts().begin(), existingConfig->getPorts().end(), ports[j]) != existingConfig->getPorts().end()) {
+                    configExists = true;
+                    logMessage("INFO", "Configuration already exists for " + host + ":" + intToString(ports[j]));
+                    break;
+                }
+            }
+
+            // Si une telle configuration existe, ne créez pas de nouveau socket
+            if (configExists) {
+                continue;
+            }
+
+            // Sinon, créer un nouveau socket
             int server_fd = createSocket();
 
             try {
@@ -191,7 +212,7 @@ void Server::initSockets()
                 if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0)
                 {
                     close(server_fd);
-                    throw std::runtime_error(logMessageError("ERROR", "Failed to bind socket for host: " + host));
+                    throw std::runtime_error("Failed to bind socket for host: " + host);
                 }
 
                 // Ajoute l'adresse au vecteur _addresses après un bind réussi
@@ -206,7 +227,7 @@ void Server::initSockets()
                 // Ajoute le socket à poll
                 addServerSocketToPoll(server_fd);
 
-                logMessage("INFO", "Server is listening on " + host + ":" + intToString(ports[j]));
+                logMessage("INFO", "Server is listening on " + host + ":" + intToString(ports[j]) + "\n");
             } 
             catch (const std::exception& e) {
                 close(server_fd); // Nettoyage en cas d'erreur
@@ -276,24 +297,60 @@ ServerConfig* Server::getConfigForSocket(int socket)
     return NULL; // Aucun match trouvé
 }
 
-ServerConfig* Server::getConfigForRequest(const std::string& hostHeader) {
-    if (hostHeader.empty()) {
+ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int connectedPort) {
+
+	if (hostHeader.empty()) {
         logMessage("WARNING", "Empty Host header received, using default configuration.");
-        return &_configs[0];
+        return &_configs[0]; // Utiliser la première configuration par défaut
     }
+
+    // Extraire l'adresse sans le port
+    std::string hostWithoutPort = hostHeader;
+    int portFromHeader = connectedPort; // Utiliser le port de connexion par défaut
+    size_t colonPos = hostHeader.find(':');
+    if (colonPos != std::string::npos) {
+        hostWithoutPort = hostHeader.substr(0, colonPos);
+        std::istringstream ss(hostHeader.substr(colonPos + 1));
+        ss >> portFromHeader;
+    }
+
+    ServerConfig* fallbackConfig = NULL;
 
     for (size_t i = 0; i < _configs.size(); ++i) {
         const std::string& configHost = _configs[i].getHost();
         const std::string& configServerName = _configs[i].getServerName();
+        const std::vector<int>& configPorts = _configs[i].getPorts();
 
-        if (hostHeader == configServerName || hostHeader == configHost) {
-            return &_configs[i];
+		if (!configServerName.empty())
+		{
+			if (hostHeader == configServerName) {
+				if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end()) {
+					logMessage("INFO", "Matching configuration found for ServerName: " + configServerName);
+					return &_configs[i];
+				}
+			}
+		}
+		else
+        // Vérifier avec le host et le port pour une configuration sans server_name
+        if (hostWithoutPort == configHost) {
+            if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end()) {
+                if (!fallbackConfig) {
+                    fallbackConfig = &_configs[i];
+                }
+            }
         }
     }
 
-    logMessage("WARNING", "No matching configuration found for Host: " + hostHeader + ", using default.");
+    if (fallbackConfig) {
+        logMessage("INFO", "Using fallback configuration for Host: " + hostWithoutPort + ":" + intToString(portFromHeader));
+        return fallbackConfig;
+    }
+
+    logMessage("WARNING", "No matching configuration found for Host: " + hostHeader);
     return &_configs[0];
 }
+
+
 
 // Clean up all sockets
 void Server::cleanupSockets()
@@ -400,14 +457,32 @@ void Server::handleNewConnection(int server_fd)
 void Server::handleClientRequest(int clientIndex) {
     int client_fd = _poll_fds[clientIndex].fd;
 
+    // Lire la requête du client
     std::string buffer = readClientRequest(client_fd, clientIndex);
     if (buffer.empty()) return;
 
+    // Analyser la requête HTTP
     HttpRequest request(buffer);
 
-    // Récupérer la configuration correspondant à la requête
+    std::cout << buffer << std::endl;
+
+    // Récupérer l'en-tête "Host"
     std::string hostHeader = request.getHeaderValue("Host");
-    ServerConfig* config = getConfigForRequest(hostHeader);
+
+    // Récupérer le port connecté
+    int connectedPort = -1;
+    struct sockaddr_in addr;
+    socklen_t addrLen = sizeof(addr);
+    if (getsockname(client_fd, (struct sockaddr*)&addr, &addrLen) == 0) {
+        connectedPort = ntohs(addr.sin_port); // Convertir le port en ordre hôte
+    } else {
+        logMessage("ERROR", "Failed to get connected port for client FD: " + intToString(client_fd));
+        removeClient(clientIndex);
+        return;
+    }
+
+    // Récupérer la configuration correspondant à la requête
+    ServerConfig* config = getConfigForRequest(hostHeader, connectedPort);
 
     if (!config) {
         logMessage("ERROR", "No matching configuration found for Host: " + hostHeader);
@@ -419,7 +494,7 @@ void Server::handleClientRequest(int clientIndex) {
     std::string response = request.handleRequest(*config);
     logResponseDetails(response, request.getPath());
 
-    // Envoyer la réponse
+    // Envoyer la réponse au client
     send(client_fd, response.c_str(), response.size(), 0);
 
     // Vérifier si la connexion doit être fermée
