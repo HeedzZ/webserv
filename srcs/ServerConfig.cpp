@@ -83,6 +83,17 @@ const std::string& ServerConfig::getHost() const
     return _host;
 }
 
+size_t ServerConfig::getClientMaxBodySize() const
+{
+    return clientMaxBodySize;
+}
+
+void ServerConfig::setClientMaxBodySize(size_t size)
+{
+    clientMaxBodySize = size;
+}
+
+
 std::string ServerConfig::extractLocationPath(const std::string& line)
 {
     std::istringstream iss(line);
@@ -218,6 +229,14 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
         {
             parseLocationDirective(token, line, currentLocation, inLocationBlock);
         }
+        if (token == "client_max_body_size")
+        {
+            size_t size;
+            iss >> size;
+            if (size <= 0)
+                throw std::runtime_error("Invalid value for client_max_body_size: " + line);
+            setClientMaxBodySize(size);
+        }
     }
 
     throw std::runtime_error("Unexpected end of file. Missing '}' for server block.");
@@ -297,6 +316,14 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
         }
         _host = hostValue;
     }
+    if (error_pages.empty())
+    {
+        setErrorPage(404, ("/main/errors/404.html"));
+        setErrorPage(500, ("/main/errors/500.html"));
+        setErrorPage(411, ("/main/errors/411.html"));
+        setErrorPage(400, ("/main/errors/400.html"));
+        setErrorPage(405, ("/main/errors/405.html"));
+    }
     return true;
 }
 
@@ -319,33 +346,38 @@ bool ServerConfig::parseErrorPageDirective(std::istringstream& iss)
 {
     int code;
     std::string path;
+
     iss >> code >> path;
-    path.resize(path.size() - 1);
+
+    if (!path.empty() && path[path.size() - 1] == ';')
+        path.resize(path.size() - 1);
+
     if (path.empty())
     {
         throw std::runtime_error("Error page path is missing or invalid.");
         return false;
     }
-    std::ifstream testFile(path.c_str());
+    std::string fullPath = root + path;
+    std::ifstream testFile(fullPath.c_str());
     if (!testFile.is_open())
     {
-        throw std::runtime_error("Error page file does not exist :" + path);
+        throw std::runtime_error("Error page file does not exist: " + path);
         return false;
     }
+
     testFile.close();
+
     setErrorPage(code, path);
     return true;
 }
 
-void ServerConfig::parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock)
-{
-    if (token == "server_name" || token == "listen")
+void ServerConfig::parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock) {
+    if (token == "limit_except")
     {
-        std::cerr << "Directive '" << token << "' is not allowed inside a location block." << std::endl;
-        throw std::runtime_error("Invalide Directive");
-        inLocationBlock = false;
+        std::string methods = line.substr(line.find("limit_except") + 12);
+        currentLocation->setAllowedMethods(methods);
     }
-    if (token == "root")
+    else if (token == "root")
     {
         std::string rootValue = line.substr(line.find(token) + token.length() + 1);
         rootValue.resize(rootValue.size() - 2);
@@ -353,13 +385,14 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
 
         std::ifstream testFile(rootValue.c_str());
         if (!testFile.is_open())
-            throw std::runtime_error("The specified root directory does not exist" + rootValue);
+            throw std::runtime_error("The specified root directory does not exist: " + rootValue);
     }
     else if (token == "index")
         parseIndexDirective(line, currentLocation);
     else if (token == "}")
         inLocationBlock = false;
 }
+
 
 void ServerConfig::parseIndexDirective(const std::string& line, ServerLocation* currentLocation)
 {

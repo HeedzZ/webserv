@@ -77,6 +77,9 @@ private:
     // Vérification des sockets
     bool isServerSocket(int fd) const;
 
+    void validateServerConfigurations();
+    void displayConfigs(const std::vector<ServerConfig>& configs);
+    
     // Variables membres
     bool running;
     std::vector<int> _server_fds;      // Liste des sockets serveurs

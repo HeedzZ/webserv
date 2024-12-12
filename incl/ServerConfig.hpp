@@ -10,16 +10,17 @@
 
 class ServerConfig {
 private:
-    std::vector<int>                ports;                   // Server listening port
-    std::string                     root;                         // Server root directory
-    std::string                     index;                        // Default index file
-    std::map<int, std::string>      error_pages;   // Error pages (404, 403, etc.)
-    std::vector<ServerLocation>     locations;    // List of location blocks
-    std::string                     _serverName;
-    std::string                     _host;
+    std::vector<int>               ports;                   // Server listening port
+    std::string                    root;                         // Server root directory
+    std::string                    index;                        // Default index file
+    std::map<int, std::string>     error_pages;   // Error pages (404, 403, etc.)
+    std::vector<ServerLocation>    locations;    // List of location blocks
+    std::string                    _serverName;
+    std::string                    _host;
     int                            _hasListen;
     int                            _hasRoot;
     int                            _valid;
+    size_t                         clientMaxBodySize;
 public:
     // Default constructor
     ServerConfig();
@@ -27,6 +28,9 @@ public:
     // Getters and Setters
     void setPort(int serverPort);
     const std::vector<int>& getPorts() const;
+
+    size_t getClientMaxBodySize() const;
+    void setClientMaxBodySize(size_t size);
 
     void setRoot(const std::string& rootPath);
     const std::string& getRoot() const;

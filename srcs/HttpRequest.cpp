@@ -59,15 +59,32 @@ HttpRequest::HttpRequest(const std::string rawRequest)
 
 std::string HttpRequest::handleRequest(ServerConfig& config)
 {
-	if (this->_method.compare("GET") == 0)
-		return handleGet(config);
-	else if (this->_method.compare("POST") == 0)
-		return handlePost(config);
-	else if (this->_method.compare("DELETE") == 0)
-		return handleDelete(config);
-	else
-		return (findErrorPage(config, 404));
-	
+    const std::vector<ServerLocation>& locations = config.getLocations();
+    if (_body.size() > config.getClientMaxBodySize())
+    {
+        return findErrorPage(config, 413);
+    }
+    for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
+    {
+        if (_path == it->getPath())
+        {
+            if (_method == "GET" && !it->isGetAllowed())
+                return findErrorPage(config, 405);
+            if (_method == "POST" && !it->isPostAllowed())
+                return findErrorPage(config, 405);
+            if (_method == "DELETE" && !it->isDeleteAllowed())
+                return findErrorPage(config, 405);
+            break;
+        }
+    }
+    if (_method == "GET")
+        return handleGet(config);
+    else if (_method == "POST")
+        return handlePost(config);
+    else if (_method == "DELETE")
+        return handleDelete(config);
+    else
+        return findErrorPage(config, 405);
 }
 
 std::string HttpRequest::resolveFilePath(const ServerConfig& config)
@@ -161,8 +178,8 @@ std::string HttpRequest::handleGet(ServerConfig& config)
 
 
 
-std::string HttpRequest::getMimeType(const std::string& filePath) {
-    // Tableau associatif pour les types MIME les plus courants
+std::string HttpRequest::getMimeType(const std::string& filePath)
+{
     std::map<std::string, std::string> mimeTypes;
     mimeTypes[".php"] = "text/html";
     mimeTypes[".html"] = "text/html";
@@ -316,6 +333,19 @@ std::string extractJsonValue(const std::string& json, const std::string& key)
     return json.substr(valueStart, valueEnd - valueStart);
 }
 
+bool ensureUploadDirectoryExists()
+{
+    struct stat info;
+    if (stat("upload", &info) != 0)
+    {
+        if (mkdir("upload", 0755) != 0)
+            return false;
+    }
+    else if (!(info.st_mode & S_IFDIR))
+        return false;
+    return true;
+}
+
 std::string HttpRequest::uploadTxt(ServerConfig& config, std::string response)
 {
     std::string fileName = extractJsonValue(this->_body, "fileName");
@@ -323,10 +353,16 @@ std::string HttpRequest::uploadTxt(ServerConfig& config, std::string response)
 
     if (fileName.empty() || fileContent.empty())
         return findErrorPage(config, 400);
+
+    // Vérifier et créer le dossier upload si nécessaire
+    if (!ensureUploadDirectoryExists())
+        return findErrorPage(config, 500);
+
     std::string targetPath = "upload/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
+
     outFile.write(fileContent.c_str(), fileContent.size());
     outFile.close();
 
@@ -350,10 +386,16 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     size_t contentStart = _body.find("\r\n\r\n", fileNameEndPos) + 4;
     size_t contentEnd = _body.find(boundary, contentStart) - 2;
     std::string fileContent = _body.substr(contentStart, contentEnd - contentStart);
+
+    // Vérifier et créer le dossier upload si nécessaire
+    if (!ensureUploadDirectoryExists())
+        return findErrorPage(config, 500);
+
     std::string targetPath = "upload/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
+
     outFile.write(fileContent.c_str(), fileContent.size() - 46);
     outFile.close();
 
@@ -434,7 +476,7 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
 
 std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
 {
-    std::string errorPagePath = config.getErrorPage(errorCode);
+    std::string errorPagePath = config.getRoot() + config.getErrorPage(errorCode);
     if (errorPagePath.empty())
     {
         std::cerr << "Erreur : Aucune page d'erreur définie pour le code " << errorCode << std::endl;

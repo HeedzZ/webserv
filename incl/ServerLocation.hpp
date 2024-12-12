@@ -6,10 +6,13 @@
 
 class ServerLocation {
 private:
-    std::string path;                      // Path for location, e.g., "/toukoum"
-    std::string root;                      // Root directory for the location
-    std::string index;                     // Index file
-    std::map<std::string, std::string> cgi_extensions; // CGI extensions and programs
+    std::string path;
+    std::string root;
+    std::string index;
+    std::map<std::string, std::string> cgi_extensions;
+    bool allowGet;
+    bool allowPost;
+    bool allowDelete;
 
 public:
     // Constructor
@@ -26,7 +29,12 @@ public:
     void addCgiExtension(const std::string& extension, const std::string& program);
     const std::map<std::string, std::string>& getCgiExtensions() const;
     
-    // Method to display the location's configuration (for debugging)
+    bool isGetAllowed() const;
+    bool isPostAllowed() const;
+    bool isDeleteAllowed() const;
+
+    void setAllowedMethods(const std::string& methodsLine);
+
     void display() const;
 };
 
