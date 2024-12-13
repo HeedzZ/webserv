@@ -91,7 +91,6 @@ std::string HttpRequest::resolveFilePath(const ServerConfig& config)
 {
     std::string fullPath;
     bool locationFound = false;
-
     const std::vector<ServerLocation>& locations = config.getLocations();
     for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
     {
@@ -118,7 +117,6 @@ std::string HttpRequest::resolveFilePath(const ServerConfig& config)
 
 bool HttpRequest::isFileAccessible(const std::string& filePath)
 {
-    std::cout << filePath << std::endl;
     struct stat fileStat;
     if (stat(filePath.c_str(), &fileStat) != 0)
         return false;
@@ -196,6 +194,7 @@ std::string HttpRequest::getMimeType(const std::string& filePath)
     mimeTypes[".xml"] = "application/xml";
     mimeTypes[".txt"] = "text/plain";
     mimeTypes[".py"] = "text/html";
+    mimeTypes[".mp4"] = "video/mp4";
 
     size_t dotPos = filePath.find_last_of('.');
     if (dotPos != std::string::npos) {

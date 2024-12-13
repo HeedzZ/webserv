@@ -485,7 +485,7 @@ void Server::handleClientRequest(int clientIndex)
     // Analyser la requête HTTP
     HttpRequest request(buffer);
 
-	std::cout << buffer << std::endl;
+	//std::cout << buffer << std::endl;
     // Récupérer l'en-tête "Host"
     std::string hostHeader = request.getHeaderValue("Host");
 
@@ -512,7 +512,7 @@ void Server::handleClientRequest(int clientIndex)
 
     // Vérifier si la méthode est autorisée
     std::string response = request.handleRequest(*config);
-	std::cout << response << std::endl;
+	//std::cout << response << std::endl;
     // Envoyer la réponse au client
     send(client_fd, response.c_str(), response.size(), 0);
 
@@ -545,30 +545,52 @@ void Server::logResponseDetails(const std::string& response, const std::string& 
 }
 
 // Read a client request
-std::string Server::readClientRequest(int client_fd, int clientIndex)
-{
+std::string Server::readClientRequest(int client_fd, int clientIndex) {
     std::string buffer;
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0)
-    {
+    // Lire les données initiales (en-têtes)
+    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0) {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
-        if (buffer.find("\r\n\r\n") != std::string::npos)
+        if (buffer.find("\r\n\r\n") != std::string::npos) { // Fin des en-têtes
             break;
+        }
     }
 
-    if (bytes_read <= 0)
-    {
+    if (bytes_read <= 0) {
         logMessage("WARNING", "Client connection closed or read error occurred.");
         removeClient(clientIndex);
         return "";
     }
 
+    // Vérifier si un corps doit être lu
+    size_t contentLengthPos = buffer.find("Content-Length:");
+    if (contentLengthPos != std::string::npos) {
+        size_t start = buffer.find(" ", contentLengthPos) + 1;
+        size_t end = buffer.find("\r\n", contentLengthPos);
+        int contentLength = std::atoi(buffer.substr(start, end - start).c_str());
+
+        // Lire le corps s'il reste des données
+        size_t currentBodySize = buffer.size() - buffer.find("\r\n\r\n") - 4;
+        while (currentBodySize < static_cast<size_t>(contentLength)) {
+            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
+            if (bytes_read <= 0) {
+                logMessage("WARNING", "Client disconnected before sending complete body.");
+                removeClient(clientIndex);
+                return "";
+            }
+            tempBuffer[bytes_read] = '\0';
+            buffer += std::string(tempBuffer, bytes_read);
+            currentBodySize += bytes_read;
+        }
+    }
+
     logMessage("INFO", "Complete request received (" + intToString(buffer.size()) + " bytes).");
     return buffer;
 }
+
 
 // Remove a client from the poll array
 void Server::removeClient(int index)
