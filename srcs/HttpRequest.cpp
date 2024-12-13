@@ -151,7 +151,7 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     if (!isFileAccessible(fullPath))
         return findErrorPage(config, 404);
 
-    if (fullPath.find(".py") != std::string::npos && fullPath.find("uploads/") == std::string::npos)
+    if (fullPath.find(".py") != std::string::npos && fullPath.find("/var/www/upload/") == std::string::npos)
         return executeCGI(fullPath, config);
 
     std::string fileContent = readFile(fullPath);
@@ -337,9 +337,9 @@ std::string extractJsonValue(const std::string& json, const std::string& key)
 bool ensureUploadDirectoryExists()
 {
     struct stat info;
-    if (stat("upload", &info) != 0)
+    if (stat("var/www/upload", &info) != 0)
     {
-        if (mkdir("upload", 0755) != 0)
+        if (mkdir("var/www/upload", 0755) != 0)
             return false;
     }
     else if (!(info.st_mode & S_IFDIR))
@@ -359,7 +359,7 @@ std::string HttpRequest::uploadTxt(ServerConfig& config, std::string response)
     if (!ensureUploadDirectoryExists())
         return findErrorPage(config, 500);
 
-    std::string targetPath = "upload/" + fileName;
+    std::string targetPath = "var/www/upload/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
@@ -387,16 +387,10 @@ std::string HttpRequest::uploadFile(ServerConfig& config, std::string response, 
     size_t contentStart = _body.find("\r\n\r\n", fileNameEndPos) + 4;
     size_t contentEnd = _body.find(boundary, contentStart) - 2;
     std::string fileContent = _body.substr(contentStart, contentEnd - contentStart);
-
-    // Vérifier et créer le dossier upload si nécessaire
-    if (!ensureUploadDirectoryExists())
-        return findErrorPage(config, 500);
-
-    std::string targetPath = "upload/" + fileName;
+    std::string targetPath = "var/www/upload/" + fileName;
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
     if (!outFile.is_open())
         return findErrorPage(config, 500);
-
     outFile.write(fileContent.c_str(), fileContent.size() - 46);
     outFile.close();
 
@@ -448,7 +442,7 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
 {
     std::string response;
 
-     std::string resourcePath = "upload/" + _path;
+     std::string resourcePath = "var/www/upload/" + _path;
 
     struct stat fileStat;
     if (stat(resourcePath.c_str(), &fileStat) != 0)

@@ -2,7 +2,7 @@
 import os
 import json
 
-UPLOAD_DIR = "html/uploads"
+UPLOAD_DIR = "var/www/upload"
 
 def list_files():
     try:

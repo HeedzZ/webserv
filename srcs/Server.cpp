@@ -485,8 +485,7 @@ void Server::handleClientRequest(int clientIndex)
     // Analyser la requête HTTP
     HttpRequest request(buffer);
 
-    std::cout << buffer << std::endl;
-
+	std::cout << buffer << std::endl;
     // Récupérer l'en-tête "Host"
     std::string hostHeader = request.getHeaderValue("Host");
 
@@ -513,14 +512,10 @@ void Server::handleClientRequest(int clientIndex)
 
     // Vérifier si la méthode est autorisée
     std::string response = request.handleRequest(*config);
-
+	std::cout << response << std::endl;
     // Envoyer la réponse au client
     send(client_fd, response.c_str(), response.size(), 0);
 
-    // Vérifier si la connexion doit être fermée
-    if (request.getHeaderValue("Connection") != "keep-alive") {
-        removeClient(clientIndex); // Fermer la connexion
-    }
 }
 
 // Log details of the response
@@ -560,7 +555,6 @@ std::string Server::readClientRequest(int client_fd, int clientIndex)
     {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
-        std::cout << buffer << std::endl;
         if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
     }

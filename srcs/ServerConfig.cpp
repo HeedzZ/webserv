@@ -318,11 +318,11 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
     }
     if (error_pages.empty())
     {
-        setErrorPage(404, ("/main/errors/404.html"));
-        setErrorPage(500, ("/main/errors/500.html"));
-        setErrorPage(411, ("/main/errors/411.html"));
-        setErrorPage(400, ("/main/errors/400.html"));
-        setErrorPage(405, ("/main/errors/405.html"));
+        setErrorPage(404, ("main/errors/404.html"));
+        setErrorPage(500, ("main/errors/500.html"));
+        setErrorPage(411, ("main/errors/411.html"));
+        setErrorPage(400, ("main/errors/400.html"));
+        setErrorPage(405, ("main/errors/405.html"));
     }
     return true;
 }
