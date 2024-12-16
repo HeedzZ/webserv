@@ -53,8 +53,6 @@ public:
 	int	getValid() const;
     std::string toString() const;
 
-    bool isValidIP(const std::string& ip) const;
-    void display() const;
 	ServerConfig* parseServerBlock(std::ifstream& filepath);
     void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);
     bool parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot);
@@ -64,6 +62,9 @@ public:
     void parseIndexDirective(const std::string& line, ServerLocation* currentLocation);
 
     std::string extractLocationPath(const std::string& line);
+    bool isValidIP(const std::string& ip) const;
+    void handleClientMaxBodySizeDirective(std::istringstream& iss, const std::string& line);
+    void display() const;
 };
 
 #endif
