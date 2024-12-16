@@ -19,7 +19,7 @@ std::string HttpRequest::intToString(int value)
     return oss.str();
 }
 
-HttpRequest::HttpRequest(const std::string rawRequest)
+HttpRequest::HttpRequest(const std::string rawRequest) : _method(""), _path(""), _httpVersion(""), _body("")
 {
     std::istringstream requestStream(rawRequest);
     std::string line;
@@ -506,6 +506,23 @@ std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)
     return response.str();
 }
 
+std::string HttpRequest::getHttpVersion(void)
+{
+    return _httpVersion;
+}
+
+int HttpRequest::extractStatusCode(const std::string& response) {
+    size_t spacePos = response.find(' ');
+    if (spacePos != std::string::npos) {
+        size_t nextSpacePos = response.find(' ', spacePos + 1);
+        if (nextSpacePos != std::string::npos) {
+            std::string statusCodeStr = response.substr(spacePos + 1, nextSpacePos - spacePos - 1);
+            return std::atoi(statusCodeStr.c_str()); // Convertit en entier (non sécurisé)
+        }
+    }
+    return 0; // Retourne 0 si le statut ne peut pas être extrait
+}
+
 std::string HttpRequest::generateDefaultErrorPage(int errorCode)
 {
     std::ostringstream response;
@@ -535,6 +552,10 @@ std::string HttpRequest::getHeaderValue(const std::string& headerName) const
     return "";
 }
 
+std::string HttpRequest::getMethod() const
+{
+    return _method;
+}
 
 std::string HttpRequest::getPath() const
 {

@@ -45,6 +45,8 @@ public:
 	std::string getPath() const;
 	std::string getMethod() const;
 	std::string getHeaderValue(const std::string& headerName) const;
+	std::string getHttpVersion(void);
+	int extractStatusCode(const std::string& response);
 	std::string intToString(int value);
 	//Execute CGI fonctions :
 	void createPipes(int outputPipe[2], int inputPipe[2]);

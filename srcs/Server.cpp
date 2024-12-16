@@ -177,11 +177,7 @@ int Server::createSocket()
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (server_fd < 0)
-    {
         throw std::runtime_error(logMessageError("ERROR", "Failed to create socket."));
-    }
-
-    logMessage("INFO", "Socket created successfully.");
     return server_fd;
 }
 
@@ -206,7 +202,7 @@ void Server::initSockets()
                     existingConfig->getHost() == host && 
                     std::find(existingConfig->getPorts().begin(), existingConfig->getPorts().end(), ports[j]) != existingConfig->getPorts().end()) {
                     configExists = true;
-                    logMessage("INFO", "Configuration already exists for " + host + ":" + intToString(ports[j]));
+                    //logMessage("INFO", "Configuration already exists for " + host + ":" + intToString(ports[j]));
                     break;
                 }
             }
@@ -247,7 +243,7 @@ void Server::initSockets()
                 // Ajoute le socket à poll
                 addServerSocketToPoll(server_fd);
 
-                logMessage("INFO", "Server is listening on " + host + ":" + intToString(ports[j]) + "\n");
+                logMessage("INFO", "Server is listening on " + host + ":" + intToString(ports[j]));
             } 
             catch (const std::exception& e) {
                 close(server_fd); // Nettoyage en cas d'erreur
@@ -267,24 +263,6 @@ void Server::configureSocket(int server_fd)
         close(server_fd);
         throw std::runtime_error(logMessageError("ERROR", "Failed to configure socket options (SO_REUSEADDR)."));
     }
-    logMessage("INFO", "Socket configured with SO_REUSEADDR.");
-}
-
-// Bind a socket to an address and port
-void Server::bindSocket(int server_fd, int port)
-{
-    sockaddr_in address = {};
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port);
-
-    if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0)
-    {
-        close(server_fd);
-        throw std::runtime_error(logMessageError("ERROR", "Failed to bind socket."));
-    }
-    logMessage("INFO", "Socket bound to port " + intToString(port) + ".");
-    _addresses.push_back(address);
 }
 
 // Set a socket to listen for connections
@@ -295,7 +273,6 @@ void Server::listenOnSocket(int server_fd)
         close(server_fd);
         throw std::runtime_error(logMessageError("ERROR", "Failed to set socket to listen."));
     }
-    logMessage("INFO", "Socket is now listening.");
 }
 
 // Add a server socket to the poll array
@@ -306,27 +283,22 @@ void Server::addServerSocketToPoll(int server_fd)
     server_poll_fd.events = POLLIN;
     _poll_fds.push_back(server_poll_fd);
     _server_fds.push_back(server_fd);
-
-    logMessage("INFO", "Server is listening on port " + intToString(ntohs(_addresses.back().sin_port)) + ".");
 }
 
 ServerConfig* Server::getConfigForSocket(int socket)
 {
     if (_socketToConfig.find(socket) != _socketToConfig.end())
         return _socketToConfig[socket];
-    return NULL; // Aucun match trouvé
+    return NULL;
 }
 
 ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int connectedPort) {
 
-	if (hostHeader.empty()) {
-        logMessage("WARNING", "Empty Host header received, using default configuration.");
-        return &_configs[0]; // Utiliser la première configuration par défaut
-    }
+	if (hostHeader.empty())
+        return &_configs[0];
 
-    // Extraire l'adresse sans le port
     std::string hostWithoutPort = hostHeader;
-    int portFromHeader = connectedPort; // Utiliser le port de connexion par défaut
+    int portFromHeader = connectedPort;
     size_t colonPos = hostHeader.find(':');
     if (colonPos != std::string::npos) {
         hostWithoutPort = hostHeader.substr(0, colonPos);
@@ -344,14 +316,11 @@ ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int con
 		if (!configServerName.empty())
 		{
 			if (hostHeader == configServerName) {
-				if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end()) {
-					logMessage("INFO", "Matching configuration found for ServerName: " + configServerName);
+				if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end())
 					return &_configs[i];
-				}
 			}
 		}
 		else
-        // Vérifier avec le host et le port pour une configuration sans server_name
         if (hostWithoutPort == configHost) {
             if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end()) {
                 if (!fallbackConfig) {
@@ -361,12 +330,8 @@ ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int con
         }
     }
 
-    if (fallbackConfig) {
-        logMessage("INFO", "Using fallback configuration for Host: " + hostWithoutPort + ":" + intToString(portFromHeader));
+    if (fallbackConfig)
         return fallbackConfig;
-    }
-
-    logMessage("WARNING", "No matching configuration found for Host: " + hostHeader);
     return &_configs[0];
 }
 
@@ -384,7 +349,6 @@ void Server::cleanupSockets()
         }
     }
     _poll_fds.clear();
-    logMessage("INFO", "All sockets have been cleaned up.");
 }
 
 // Main server loop
@@ -395,13 +359,13 @@ void Server::run()
 
     while (running)
     {
-        logMessage("DEBUG", "Waiting for events on sockets...");
         int poll_count = poll(&_poll_fds[0], _poll_fds.size(), -1);
 
         if (poll_count < 0)
         {
+            if (!running)
+                break;
             logMessage("ERROR", "Poll failed with error: " + std::string(strerror(errno)));
-            if (!running) break;
             continue;
         }
 
@@ -416,20 +380,13 @@ void Server::run()
             if (_poll_fds[i].revents & POLLIN)
             {
                 if (isServerSocket(_poll_fds[i].fd))
-                {
-                    //logMessage("INFO", "New connection detected on socket: " + intToString(_poll_fds[i].fd));
                     handleNewConnection(_poll_fds[i].fd);
-                }
                 else
-                {
-                    logMessage("INFO", "Client request detected on socket: " + intToString(_poll_fds[i].fd));
                     handleClientRequest(i);
-                }
             }
             _poll_fds[i].revents = 0;
         }
     }
-    logMessage("INFO", "Server stopped.");
 }
 
 
@@ -461,16 +418,10 @@ void Server::handleNewConnection(int server_fd)
     // Associez le socket client à la configuration du socket serveur (server_fd)
     ServerConfig* config = _socketToConfig[server_fd];
     if (config)
-    {
-        _socketToConfig[client_fd] = config; // Associez le client au même config que le serveur
-        logMessage("INFO", "New connection associated with server configuration.");
-    }
-    else
-    {
-        logMessage("WARNING", "Could not find server configuration for client.");
-    }
+        _socketToConfig[client_fd] = config;
 
-    logMessage("INFO", "New connection accepted.");
+    else
+        logMessage("WARNING", "Could not find server configuration for client.");
 }
 
 
@@ -512,7 +463,7 @@ void Server::handleClientRequest(int clientIndex)
 
     // Vérifier si la méthode est autorisée
     std::string response = request.handleRequest(*config);
-	//std::cout << response << std::endl;
+    logMessage("INFO", request.getMethod() + " " + request.getPath() + " " + request.getHttpVersion() + + "\" " + intToString(request.extractStatusCode(response)) + " " + intToString(response.size()) + " \"" + request.getHeaderValue("User-Agent") + "\"");
     // Envoyer la réponse au client
     send(client_fd, response.c_str(), response.size(), 0);
 
@@ -540,7 +491,6 @@ void Server::logResponseDetails(const std::string& response, const std::string& 
         size_t contentTypeEnd = response.find("\r\n", contentTypeStart);
         contentType = response.substr(contentTypeStart + 14, contentTypeEnd - (contentTypeStart + 14));
     }
-
     logMessage("INFO", "Response sent: " + statusCode + " for " + path + " with Content-Type: " + contentType);
 }
 
@@ -560,7 +510,6 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
     }
 
     if (bytes_read <= 0) {
-        logMessage("WARNING", "Client connection closed or read error occurred.");
         removeClient(clientIndex);
         return "";
     }
@@ -586,8 +535,6 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
             currentBodySize += bytes_read;
         }
     }
-
-    logMessage("INFO", "Complete request received (" + intToString(buffer.size()) + " bytes).");
     return buffer;
 }
 
@@ -601,10 +548,7 @@ void Server::removeClient(int index)
         _socketToConfig.erase(client_fd); // Supprimez l'association
 
     if (client_fd != -1)
-    {
-        logMessage("INFO", "Disconnecting client with descriptor " + intToString(client_fd) + ".");
         close(client_fd);
-    }
     _poll_fds.erase(_poll_fds.begin() + index);
 }
 

@@ -7,7 +7,7 @@ import hashlib
 import json
 
 # Path to the database
-DATABASE_PATH = 'users.db'
+DATABASE_PATH = 'var/www/users.db'
 
 # Create a connection to the database and initialize if necessary
 conn = sqlite3.connect(DATABASE_PATH)

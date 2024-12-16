@@ -3,7 +3,7 @@
 import sqlite3
 
 # Chemin vers la base de données
-DATABASE_PATH = 'users.db'
+DATABASE_PATH = 'var/www/users.db'
 
 print("Content-Type: text/html\n")
 

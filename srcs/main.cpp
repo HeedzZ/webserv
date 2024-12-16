@@ -7,10 +7,7 @@ Server* globalServerPointer = NULL;
 void signalHandlerWrapper(int signal)
 {
     if (signal == SIGINT && globalServerPointer != NULL)
-    {
-        std::cout << std::endl << "Interrupt signal received. Stopping the server..." << std::endl;
         globalServerPointer->stop();
-    }
 }
 
 int main(int argc, char* argv[])
