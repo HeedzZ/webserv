@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     const char* configPath;
 
     if (argc != 2)
-        configPath = "Configs/server.conf";
+        configPath = "Configs/basic.conf";
     else
         configPath = argv[1];
     try

@@ -65,8 +65,8 @@ void ServerLocation::setAllowedMethods(const std::string& methodsLine)
     std::istringstream iss(methodsLine);
     std::string method;
 
-    // Active uniquement les méthodes spécifiées
-    while (iss >> method) {
+    while (iss >> method)
+    {
         std::transform(method.begin(), method.end(), method.begin(), ::toupper);
         if (method == "GET")
             allowGet = true;
