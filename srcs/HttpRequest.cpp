@@ -434,15 +434,13 @@ std::string HttpRequest::handlePost(ServerConfig& config)
     return findErrorPage(config, 415);
 }
 
-
-
-
 std::string HttpRequest::handleDelete(ServerConfig& config)
 {
     std::string response;
 
-     std::string resourcePath = "var/www/upload/" + _path;
+    std::string resourcePath = "var/www/upload" + _path;
 
+    std::cout << "DELETE ==== " << resourcePath << std::endl;
     struct stat fileStat;
     if (stat(resourcePath.c_str(), &fileStat) != 0)
         return findErrorPage(config, 404);
