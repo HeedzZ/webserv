@@ -282,50 +282,92 @@ void Server::handleClientRequest(int clientIndex)
 
 }
 
-std::string Server::readClientRequest(int client_fd, int clientIndex)
-{
+std::string Server::readClientRequest(int client_fd, int clientIndex) {
     std::string buffer;
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0)
-    {
+    // Lecture initiale pour capturer les en-têtes
+    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0) {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
+
+        // Si les en-têtes sont entièrement reçus
         if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
     }
 
-    if (bytes_read <= 0)
-    {
+    if (bytes_read <= 0) {
         removeClient(clientIndex);
         return "";
     }
 
-    size_t contentLengthPos = buffer.find("Content-Length:");
-    if (contentLengthPos != std::string::npos)
-    {
-        size_t start = buffer.find(" ", contentLengthPos) + 1;
-        size_t end = buffer.find("\r\n", contentLengthPos);
-        int contentLength = std::atoi(buffer.substr(start, end - start).c_str());
+    // Vérifier si l'encodage est chunked
+    size_t transferEncodingPos = buffer.find("Transfer-Encoding: chunked");
+    if (transferEncodingPos != std::string::npos) {
+        std::string body;
+        size_t bodyStart = buffer.find("\r\n\r\n") + 4;
 
-        size_t currentBodySize = buffer.size() - buffer.find("\r\n\r\n") - 4;
-        while (currentBodySize < static_cast<size_t>(contentLength))
-        {
-            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-            if (bytes_read <= 0)
-            {
-                logMessage("WARNING", "Client disconnected before sending complete body.");
-                removeClient(clientIndex);
+        while (true) {
+            // Assurez-vous que nous avons assez de données pour lire la taille du chunk
+            size_t chunkSizePos = buffer.find("\r\n", bodyStart);
+            while (chunkSizePos == std::string::npos) {
+                bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
+                if (bytes_read <= 0) {
+                    logMessage("WARNING", "Client disconnected before sending complete chunked body.");
+                    removeClient(clientIndex);
+                    return "";
+                }
+                tempBuffer[bytes_read] = '\0';
+                buffer += std::string(tempBuffer, bytes_read);
+                chunkSizePos = buffer.find("\r\n", bodyStart);
+            }
+
+            // Taille du chunk en hexadécimal
+            std::string chunkSizeStr = buffer.substr(bodyStart, chunkSizePos - bodyStart);
+            char* endPtr = NULL;
+            int chunkSize = std::strtol(chunkSizeStr.c_str(), &endPtr, 16);
+
+            if (*endPtr != '\0' || chunkSize < 0) {
+                logMessage("ERROR", "Invalid chunk size in Transfer-Encoding: chunked.");
                 return "";
             }
-            tempBuffer[bytes_read] = '\0';
-            buffer += std::string(tempBuffer, bytes_read);
-            currentBodySize += bytes_read;
+
+            if (chunkSize == 0) {
+                // Sauter la ligne vide après le dernier chunk
+                buffer = buffer.substr(0, buffer.find("\r\n\r\n") + 4) + body;
+                buffer.replace(transferEncodingPos, std::string("Transfer-Encoding: chunked").length(), "Content-Length: " + intToString(body.size()));
+                return buffer;
+            }
+
+            // Vérifier si les données du chunk sont entièrement reçues
+            size_t chunkDataStart = chunkSizePos + 2;
+            size_t chunkDataEnd = chunkDataStart + chunkSize;
+            while (chunkDataEnd > buffer.size()) {
+                bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
+                if (bytes_read <= 0) {
+                    logMessage("WARNING", "Client disconnected before sending complete chunked body.");
+                    removeClient(clientIndex);
+                    return "";
+                }
+                tempBuffer[bytes_read] = '\0';
+                buffer += std::string(tempBuffer, bytes_read);
+            }
+
+            // Ajouter le chunk au corps
+            body += buffer.substr(chunkDataStart, chunkSize);
+
+            // Passer au prochain chunk
+            bodyStart = chunkDataEnd + 2; // Sauter "\r\n"
         }
     }
+
     return buffer;
 }
+
+
+
+
 
 void Server::removeClient(int index)
 {
