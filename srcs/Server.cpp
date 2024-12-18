@@ -13,167 +13,13 @@
 #include "Server.hpp"
 #include "HttpRequest.hpp"
 #include "ServerConfig.hpp"
-#include <stdexcept>
-#include <sstream>
-#include <fstream>
-#include <algorithm>
-#include <ctime>
-#include <memory>
-#include <iomanip>
+
 
 // Initialize static variable
 volatile sig_atomic_t Server::signal_received = 0;
 
-// Constructor
-Server::Server(const std::string& configFile) : running(false)
-{
-    logMessage("INFO", "Initializing the server...");
-    try
-    {
-        if (!parseConfigFile(configFile))
-            throw std::runtime_error("Failed to parse configuration file: " + configFile);
-        validateServerConfigurations();
-        initSockets();
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Error during server initialization: " << e.what() << std::endl;
-        cleanup();
-        throw;
-    }
-}
-
-
-void Server::cleanup()
-{
-    logMessage("INFO", "Cleaning up resources...");
-    _configs.clear();
-    cleanupSockets();
-}
-
-bool Server::parseConfigFile(const std::string& configFile)
-{
-    std::ifstream file(configFile.c_str());
-    if (!file.is_open())
-    {
-        std::cerr << "Could not open the file: " << configFile << std::endl;
-        return false;
-    }
-
-    try
-    {
-        while (file.peek() != EOF)
-        {
-            std::auto_ptr<ServerConfig> currentConfig(new ServerConfig());
-            if (currentConfig->parseServerBlock(file))
-                _configs.push_back(*currentConfig);
-        }
-    }
-    catch (const std::runtime_error& e)
-    {
-        std::cerr << "Configuration error: " << e.what() << std::endl;
-        return false;
-    }
-    catch (...)
-    {
-        std::cerr << "Unexpected error while parsing configuration." << std::endl;
-        return false;
-    }
-
-    return !_configs.empty();
-}
-
-void Server::validateServerConfigurations()
-{
-    for (size_t i = 0; i < _configs.size(); ++i)
-    {
-        const std::string& host1 = _configs[i].getHost();
-        const std::vector<int>& ports1 = _configs[i].getPorts();
-        const std::string& serverName1 = _configs[i].getServerName();
-
-        for (size_t j = i + 1; j < _configs.size(); ++j)
-        {
-            const std::string& host2 = _configs[j].getHost();
-            const std::vector<int>& ports2 = _configs[j].getPorts();
-            const std::string& serverName2 = _configs[j].getServerName();
-
-            for (size_t p1 = 0; p1 < ports1.size(); ++p1)
-            {
-                for (size_t p2 = 0; p2 < ports2.size(); ++p2)
-                {
-                    if (ports1[p1] == ports2[p2] && host1 == host2)
-                    {
-                        if (serverName1.empty() && serverName2.empty())
-                        {
-                            throw std::runtime_error(
-                                "Configuration error: Multiple servers on the same host (" +
-                                host1 + ") and port (" + intToString(ports1[p1]) +
-                                ") without server_name.");
-                        }
-                        if (!serverName1.empty() && !serverName2.empty() && serverName1 == serverName2)
-                        {
-                            throw std::runtime_error(
-                                "Configuration error: Duplicate server_name (" + serverName1 +
-                                ") on the same host (" + host1 + ") and port (" + intToString(ports1[p1]) + ").");
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Destructor
-Server::~Server()
-{
-    cleanupSockets();
-}
-
-// Log a message
-void Server::logMessage(const std::string& level, const std::string& message) const
-{
-    // Get the current time
-    std::time_t now = std::time(NULL);
-    std::tm* localTime = std::localtime(&now);
-
-    // Format the time manually
-    char timeBuffer[20];
-    std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", localTime);
-
-    // Print the formatted log message
-    std::cout << "[" << level << "] " << timeBuffer << " - " << message << std::endl;
-}
-
-// Generate a log message as a string
-std::string Server::logMessageError(const std::string& level, const std::string& message) const
-{
-    // Get the current time
-    std::time_t now = std::time(NULL);
-    std::tm* localTime = std::localtime(&now);
-
-    // Format the time manually
-    char timeBuffer[20];
-    std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", localTime);
-
-    // Construct the log message
-    std::ostringstream oss;
-    oss << "[" << level << "] " << timeBuffer << " - " << message;
-
-    // Return the log message
-    return oss.str();
-}
-
-// Convert an integer to a string
-std::string Server::intToString(int value)
-{
-    std::ostringstream oss;
-    oss << value;
-    return oss.str();
-}
-
 int Server::createSocket()
 {
-    // Crée un socket IPv4, orienté connexion, pour le protocole TCP
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (server_fd < 0)
@@ -182,7 +28,6 @@ int Server::createSocket()
 }
 
 
-// Initialize sockets
 void Server::initSockets()
 {
     for (size_t i = 0; i < _configs.size(); ++i) {
@@ -191,13 +36,11 @@ void Server::initSockets()
         //const std::string& serverName = _configs[i].getServerName();
 
         for (size_t j = 0; j < ports.size(); ++j) {
-            // Vérifiez si une configuration avec le même host et port existe déjà sans server_name
             bool configExists = false;
 
             for (std::map<int, ServerConfig*>::iterator it = _socketToConfig.begin(); it != _socketToConfig.end(); ++it) {
                 ServerConfig* existingConfig = it->second;
 
-                // Comparer host et ports uniquement pour les configurations sans server_name
                 if (existingConfig->getServerName().empty() && 
                     existingConfig->getHost() == host && 
                     std::find(existingConfig->getPorts().begin(), existingConfig->getPorts().end(), ports[j]) != existingConfig->getPorts().end()) {
@@ -207,46 +50,32 @@ void Server::initSockets()
                 }
             }
 
-            // Si une telle configuration existe, ne créez pas de nouveau socket
-            if (configExists) {
+            if (configExists)
                 continue;
-            }
-
-            // Sinon, créer un nouveau socket
             int server_fd = createSocket();
-
             try {
                 configureSocket(server_fd);
 
-                // Configure l'adresse et associe le socket à un port
                 sockaddr_in address = {};
                 address.sin_family = AF_INET;
-                address.sin_addr.s_addr = inet_addr(host.c_str()); // Adresse configurée dans le fichier
+                address.sin_addr.s_addr = inet_addr(host.c_str());
                 address.sin_port = htons(ports[j]);
 
-                // Tente de lier le socket
                 if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0)
                 {
                     close(server_fd);
                     throw std::runtime_error("Failed to bind socket for host: " + host);
                 }
 
-                // Ajoute l'adresse au vecteur _addresses après un bind réussi
                 _addresses.push_back(address);
-
-                // Mets le socket en mode écoute
                 listenOnSocket(server_fd);
-
-                // Associe ce socket à la configuration correspondante
                 _socketToConfig[server_fd] = &_configs[i];
-
-                // Ajoute le socket à poll
                 addServerSocketToPoll(server_fd);
-
                 logMessage("INFO", "Server is listening on " + host + ":" + intToString(ports[j]));
             } 
-            catch (const std::exception& e) {
-                close(server_fd); // Nettoyage en cas d'erreur
+            catch (const std::exception& e)
+            {
+                close(server_fd);
                 logMessage("ERROR", e.what());
                 continue;
             }
@@ -254,7 +83,6 @@ void Server::initSockets()
     }
 }
 
-// Configure socket options
 void Server::configureSocket(int server_fd)
 {
     int opt = 1;
@@ -265,7 +93,6 @@ void Server::configureSocket(int server_fd)
     }
 }
 
-// Set a socket to listen for connections
 void Server::listenOnSocket(int server_fd)
 {
     if (listen(server_fd, 10) < 0)
@@ -275,7 +102,6 @@ void Server::listenOnSocket(int server_fd)
     }
 }
 
-// Add a server socket to the poll array
 void Server::addServerSocketToPoll(int server_fd)
 {
     struct pollfd server_poll_fd = {};
@@ -292,7 +118,8 @@ ServerConfig* Server::getConfigForSocket(int socket)
     return NULL;
 }
 
-ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int connectedPort) {
+ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int connectedPort)
+{
 
 	if (hostHeader.empty())
         return &_configs[0];
@@ -335,9 +162,6 @@ ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int con
     return &_configs[0];
 }
 
-
-
-// Clean up all sockets
 void Server::cleanupSockets()
 {
     for (size_t i = 0; i < _server_fds.size(); ++i)
@@ -351,7 +175,6 @@ void Server::cleanupSockets()
     _poll_fds.clear();
 }
 
-// Main server loop
 void Server::run()
 {
     logMessage("INFO", "Server is running...");
@@ -390,13 +213,11 @@ void Server::run()
 }
 
 
-// Check if a file descriptor is a server socket
 bool Server::isServerSocket(int fd) const
 {
     return std::find(_server_fds.begin(), _server_fds.end(), fd) != _server_fds.end();
 }
 
-// Handle a new connection
 void Server::handleNewConnection(int server_fd)
 {
     sockaddr_in client_addr;
@@ -415,7 +236,6 @@ void Server::handleNewConnection(int server_fd)
 
     _poll_fds.push_back(client_poll_fd);
 
-    // Associez le socket client à la configuration du socket serveur (server_fd)
     ServerConfig* config = _socketToConfig[server_fd];
     if (config)
         _socketToConfig[client_fd] = config;
@@ -429,30 +249,25 @@ void Server::handleClientRequest(int clientIndex)
 {
     int client_fd = _poll_fds[clientIndex].fd;
 
-    // Lire la requête du client
     std::string buffer = readClientRequest(client_fd, clientIndex);
     if (buffer.empty()) return;
 
-    // Analyser la requête HTTP
     HttpRequest request(buffer);
 
 	//std::cout << buffer << std::endl;
-    // Récupérer l'en-tête "Host"
     std::string hostHeader = request.getHeaderValue("Host");
 
-    // Récupérer le port connecté
     int connectedPort = -1;
     struct sockaddr_in addr;
     socklen_t addrLen = sizeof(addr);
     if (getsockname(client_fd, (struct sockaddr*)&addr, &addrLen) == 0) {
-        connectedPort = ntohs(addr.sin_port); // Convertir le port en ordre hôte
+        connectedPort = ntohs(addr.sin_port);
     } else {
         logMessage("ERROR", "Failed to get connected port for client FD: " + intToString(client_fd));
         removeClient(clientIndex);
         return;
     }
 
-    // Récupérer la configuration correspondant à la requête
     ServerConfig* config = getConfigForRequest(hostHeader, connectedPort);
 
     if (!config) {
@@ -461,71 +276,45 @@ void Server::handleClientRequest(int clientIndex)
         return;
     }
 
-    // Vérifier si la méthode est autorisée
     std::string response = request.handleRequest(*config);
     logMessage("INFO", request.getMethod() + " " + request.getPath() + " " + request.getHttpVersion() + + "\" " + intToString(request.extractStatusCode(response)) + " " + intToString(response.size()) + " \"" + request.getHeaderValue("User-Agent") + "\"");
-    // Envoyer la réponse au client
     send(client_fd, response.c_str(), response.size(), 0);
 
 }
 
-// Log details of the response
-void Server::logResponseDetails(const std::string& response, const std::string& path)
+std::string Server::readClientRequest(int client_fd, int clientIndex)
 {
-    size_t statusLineEnd = response.find("\r\n");
-    if (statusLineEnd == std::string::npos)
-    {
-        logMessage("ERROR", "Malformed response for path: " + path);
-        return;
-    }
-
-    std::string statusLine = response.substr(0, statusLineEnd);
-    size_t statusCodeStart = statusLine.find(" ") + 1;
-    size_t statusCodeEnd = statusLine.find(" ", statusCodeStart);
-    std::string statusCode = statusLine.substr(statusCodeStart, statusCodeEnd - statusCodeStart);
-
-    size_t contentTypeStart = response.find("Content-Type: ");
-    std::string contentType = "Unknown";
-    if (contentTypeStart != std::string::npos)
-    {
-        size_t contentTypeEnd = response.find("\r\n", contentTypeStart);
-        contentType = response.substr(contentTypeStart + 14, contentTypeEnd - (contentTypeStart + 14));
-    }
-    logMessage("INFO", "Response sent: " + statusCode + " for " + path + " with Content-Type: " + contentType);
-}
-
-// Read a client request
-std::string Server::readClientRequest(int client_fd, int clientIndex) {
     std::string buffer;
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    // Lire les données initiales (en-têtes)
-    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0) {
+    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0)
+    {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
-        if (buffer.find("\r\n\r\n") != std::string::npos) { // Fin des en-têtes
+        if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
-        }
     }
 
-    if (bytes_read <= 0) {
+    if (bytes_read <= 0)
+    {
         removeClient(clientIndex);
         return "";
     }
 
-    // Vérifier si un corps doit être lu
     size_t contentLengthPos = buffer.find("Content-Length:");
-    if (contentLengthPos != std::string::npos) {
+    if (contentLengthPos != std::string::npos)
+    {
         size_t start = buffer.find(" ", contentLengthPos) + 1;
         size_t end = buffer.find("\r\n", contentLengthPos);
         int contentLength = std::atoi(buffer.substr(start, end - start).c_str());
 
-        // Lire le corps s'il reste des données
         size_t currentBodySize = buffer.size() - buffer.find("\r\n\r\n") - 4;
-        while (currentBodySize < static_cast<size_t>(contentLength)) {
+        while (currentBodySize < static_cast<size_t>(contentLength))
+        {
             bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-            if (bytes_read <= 0) {
+            if (bytes_read <= 0)
+            {
                 logMessage("WARNING", "Client disconnected before sending complete body.");
                 removeClient(clientIndex);
                 return "";
@@ -538,22 +327,18 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
     return buffer;
 }
 
-
-// Remove a client from the poll array
 void Server::removeClient(int index)
 {
     int client_fd = _poll_fds[index].fd;
 
     if (_socketToConfig.find(client_fd) != _socketToConfig.end())
-        _socketToConfig.erase(client_fd); // Supprimez l'association
+        _socketToConfig.erase(client_fd);
 
     if (client_fd != -1)
         close(client_fd);
     _poll_fds.erase(_poll_fds.begin() + index);
 }
 
-
-// Stop the server
 void Server::stop()
 {
     logMessage("INFO", "Stopping the server...");
@@ -562,27 +347,8 @@ void Server::stop()
     logMessage("INFO", "Server stopped successfully.");
 }
 
-// Signal handler
 void Server::signalHandler(int signal)
 {
     if (signal == SIGINT)
         signal_received = 1;
-}
-
-void Server::displayConfigs(const std::vector<ServerConfig>& configs)
-{
-    std::cout << "==== Displaying Server Configurations ====" << std::endl;
-
-    if (configs.empty())
-    {
-        std::cout << "No configurations found." << std::endl;
-        return;
-    }
-
-    for (size_t i = 0; i < configs.size(); ++i)
-    {
-        std::cout << "Configuration #" << i + 1 << ":" << std::endl;
-        std::cout << configs[i].toString() << std::endl;
-        std::cout << "-----------------------------------------" << std::endl;
-    }
 }
