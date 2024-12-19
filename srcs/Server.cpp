@@ -254,7 +254,7 @@ void Server::handleClientRequest(int clientIndex)
 
     HttpRequest request(buffer);
 
-	//std::cout << buffer << std::endl;
+	std::cout << buffer << std::endl;
     std::string hostHeader = request.getHeaderValue("Host");
 
     int connectedPort = -1;
@@ -292,7 +292,6 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
 
-        // Si les en-têtes sont entièrement reçus
         if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
     }
@@ -302,51 +301,64 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
         return "";
     }
 
-    // Vérifier si l'encodage est chunked
     size_t transferEncodingPos = buffer.find("Transfer-Encoding: chunked");
     if (transferEncodingPos != std::string::npos) {
         std::string body;
         size_t bodyStart = buffer.find("\r\n\r\n") + 4;
+        size_t currentPos = bodyStart;
 
         while (true) {
-            // Assurez-vous que nous avons assez de données pour lire la taille du chunk
-            size_t chunkSizePos = buffer.find("\r\n", bodyStart);
-            while (chunkSizePos == std::string::npos) {
+            // Lire plus de données si nécessaire
+            size_t nextChunkPos = buffer.find("\r\n", currentPos);
+            while (nextChunkPos == std::string::npos) {
                 bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
                 if (bytes_read <= 0) {
-                    logMessage("WARNING", "Client disconnected before sending complete chunked body.");
+                    logMessage("WARNING", "Connection lost while reading chunks");
                     removeClient(clientIndex);
                     return "";
                 }
                 tempBuffer[bytes_read] = '\0';
                 buffer += std::string(tempBuffer, bytes_read);
-                chunkSizePos = buffer.find("\r\n", bodyStart);
+                nextChunkPos = buffer.find("\r\n", currentPos);
             }
 
-            // Taille du chunk en hexadécimal
-            std::string chunkSizeStr = buffer.substr(bodyStart, chunkSizePos - bodyStart);
-            char* endPtr = NULL;
-            int chunkSize = std::strtol(chunkSizeStr.c_str(), &endPtr, 16);
+            // Extraire et nettoyer la taille du chunk
+            std::string chunkSizeHex = buffer.substr(currentPos, nextChunkPos - currentPos);
+            // Supprimer les espaces et les retours à la ligne
+            chunkSizeHex.erase(std::remove_if(chunkSizeHex.begin(), chunkSizeHex.end(), isspace), chunkSizeHex.end());
 
-            if (*endPtr != '\0' || chunkSize < 0) {
-                logMessage("ERROR", "Invalid chunk size in Transfer-Encoding: chunked.");
-                return "";
+            // Si la taille est vide, on saute les lignes superflues
+            if (chunkSizeHex.empty()) {
+                currentPos = nextChunkPos + 2;
+                continue;
             }
+
+            // Conversion hexadécimale
+            size_t chunkSize;
+            std::istringstream(chunkSizeHex) >> std::hex >> chunkSize;
 
             if (chunkSize == 0) {
-                // Sauter la ligne vide après le dernier chunk
-                buffer = buffer.substr(0, buffer.find("\r\n\r\n") + 4) + body;
-                buffer.replace(transferEncodingPos, std::string("Transfer-Encoding: chunked").length(), "Content-Length: " + intToString(body.size()));
-                return buffer;
+                // Vérification et correction : ajouter CRLF si manquant
+                if (buffer.find("\r\n", nextChunkPos + 2) == std::string::npos) {
+                    logMessage("ERROR", "Missing final CRLF after last chunk. Adding it.");
+                    buffer += "\r\n";
+                }
+
+                // Reconstituer la requête finale
+                std::string finalRequest = buffer.substr(0, transferEncodingPos);
+                finalRequest += "Content-Length: " + intToString(body.length());
+                finalRequest += buffer.substr(transferEncodingPos + 26, bodyStart - (transferEncodingPos + 26));
+                finalRequest += body;
+                return finalRequest;
             }
 
-            // Vérifier si les données du chunk sont entièrement reçues
-            size_t chunkDataStart = chunkSizePos + 2;
-            size_t chunkDataEnd = chunkDataStart + chunkSize;
-            while (chunkDataEnd > buffer.size()) {
+            size_t chunkDataStart = nextChunkPos + 2;
+
+            // Vérification et correction : données du chunk manquantes
+            while (buffer.size() < chunkDataStart + chunkSize + 2) {
                 bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
                 if (bytes_read <= 0) {
-                    logMessage("WARNING", "Client disconnected before sending complete chunked body.");
+                    logMessage("WARNING", "Connection lost while reading chunk data");
                     removeClient(clientIndex);
                     return "";
                 }
@@ -354,19 +366,31 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
                 buffer += std::string(tempBuffer, bytes_read);
             }
 
-            // Ajouter le chunk au corps
-            body += buffer.substr(chunkDataStart, chunkSize);
+            // Ajouter les données du chunk au corps
+            std::string chunkData = buffer.substr(chunkDataStart, chunkSize);
 
-            // Passer au prochain chunk
-            bodyStart = chunkDataEnd + 2; // Sauter "\r\n"
+            // Vérification et correction : retirer les caractères superflus
+            while (!chunkData.empty() && (chunkData[0] == '\r' || chunkData[0] == '\n')) {
+                logMessage("DEBUG", "Removing extra CRLF from chunk data.");
+                chunkData.erase(0, 1);
+            }
+
+            body += chunkData;
+
+            // Vérification et correction : CRLF après les données du chunk
+            size_t chunkEnd = chunkDataStart + chunkSize;
+            if (buffer.substr(chunkEnd, 2) != "\r\n") {
+                logMessage("ERROR", "Chunk data not properly terminated with \r\n. Adding it.");
+                buffer.insert(chunkEnd, "\r\n");
+            }
+
+            // Mise à jour de la position pour le prochain chunk
+            currentPos = chunkEnd + 2;
         }
     }
 
     return buffer;
 }
-
-
-
 
 
 void Server::removeClient(int index)
