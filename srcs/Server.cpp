@@ -120,9 +120,8 @@ ServerConfig* Server::getConfigForSocket(int socket)
 
 ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int connectedPort)
 {
-
-	if (hostHeader.empty())
-        return &_configs[0];
+    if (hostHeader.empty())
+        return &_configs[0];  // Par défaut, retourner la première config si pas d'host fourni.
 
     std::string hostWithoutPort = hostHeader;
     int portFromHeader = connectedPort;
@@ -133,34 +132,41 @@ ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int con
         ss >> portFromHeader;
     }
 
-    ServerConfig* fallbackConfig = NULL;
+    ServerConfig* defaultForPort = NULL;
 
     for (size_t i = 0; i < _configs.size(); ++i) {
         const std::string& configHost = _configs[i].getHost();
         const std::string& configServerName = _configs[i].getServerName();
         const std::vector<int>& configPorts = _configs[i].getPorts();
 
-		if (!configServerName.empty())
-		{
-			if (hostHeader == configServerName) {
-				if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end())
-					return &_configs[i];
-			}
-		}
-		else
-        if (hostWithoutPort == configHost) {
-            if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end()) {
-                if (!fallbackConfig) {
-                    fallbackConfig = &_configs[i];
-                }
+        // Correspondance exacte sur server_name et port
+        if (!configServerName.empty()) {
+            if (hostWithoutPort == configServerName) {
+                if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end())
+                    return &_configs[i];
             }
+        }
+
+        // Correspondance exacte sur host et port
+        if (hostWithoutPort == configHost) {
+            if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end())
+                return &_configs[i];
+        }
+
+        // Enregistrer une config de fallback pour ce port
+        if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end() && !defaultForPort) {
+            defaultForPort = &_configs[i];
         }
     }
 
-    if (fallbackConfig)
-        return fallbackConfig;
-    return &_configs[0];
+    // Retourner le premier serveur qui écoute sur ce port
+    if (defaultForPort)
+        return defaultForPort;
+
+    // Si aucun serveur n'écoute sur ce port, retourner NULL (ou gérer une 404)
+    return NULL;  // Optionnel : retourner une erreur si aucun serveur ne correspond.
 }
+
 
 void Server::cleanupSockets()
 {
