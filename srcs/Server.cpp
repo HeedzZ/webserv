@@ -260,7 +260,7 @@ void Server::handleClientRequest(int clientIndex)
 
     HttpRequest request(buffer);
 
-	std::cout << buffer << std::endl;
+	//std::cout << buffer << std::endl;
     std::string hostHeader = request.getHeaderValue("Host");
 
     int connectedPort = -1;
@@ -298,105 +298,118 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
 
+        // Si les en-têtes sont entièrement reçus (double CRLF)
         if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
     }
+    //std::cout << "Buffer (initial) :\n" << buffer << std::endl;
 
     if (bytes_read <= 0) {
         removeClient(clientIndex);
         return "";
     }
 
+    // Vérification de Transfer-Encoding: chunked
     size_t transferEncodingPos = buffer.find("Transfer-Encoding: chunked");
-    if (transferEncodingPos != std::string::npos) {
-        std::string body;
-        size_t bodyStart = buffer.find("\r\n\r\n") + 4;
-        size_t currentPos = bodyStart;
+    if (transferEncodingPos != std::string::npos)
+        return (chunkedToBody(client_fd, clientIndex, buffer, transferEncodingPos));
 
-        while (true) {
-            // Lire plus de données si nécessaire
-            size_t nextChunkPos = buffer.find("\r\n", currentPos);
-            while (nextChunkPos == std::string::npos) {
-                bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-                if (bytes_read <= 0) {
-                    logMessage("WARNING", "Connection lost while reading chunks");
-                    removeClient(clientIndex);
-                    return "";
-                }
-                tempBuffer[bytes_read] = '\0';
-                buffer += std::string(tempBuffer, bytes_read);
-                nextChunkPos = buffer.find("\r\n", currentPos);
+    size_t contentLengthPos = buffer.find("Content-Length:");
+    if (contentLengthPos != std::string::npos) {
+        size_t start = buffer.find(" ", contentLengthPos) + 1;
+        size_t end = buffer.find("\r\n", contentLengthPos);
+        int contentLength = std::atoi(buffer.substr(start, end - start).c_str());
+
+        // Lire le corps s'il reste des données
+        size_t currentBodySize = buffer.size() - buffer.find("\r\n\r\n") - 4;
+        while (currentBodySize < static_cast<size_t>(contentLength)) {
+            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
+            if (bytes_read <= 0) {
+                logMessage("WARNING", "Client disconnected before sending complete body.");
+                removeClient(clientIndex);
+                return "";
             }
-
-            // Extraire et nettoyer la taille du chunk
-            std::string chunkSizeHex = buffer.substr(currentPos, nextChunkPos - currentPos);
-            // Supprimer les espaces et les retours à la ligne
-            chunkSizeHex.erase(std::remove_if(chunkSizeHex.begin(), chunkSizeHex.end(), isspace), chunkSizeHex.end());
-
-            // Si la taille est vide, on saute les lignes superflues
-            if (chunkSizeHex.empty()) {
-                currentPos = nextChunkPos + 2;
-                continue;
-            }
-
-            // Conversion hexadécimale
-            size_t chunkSize;
-            std::istringstream(chunkSizeHex) >> std::hex >> chunkSize;
-
-            if (chunkSize == 0) {
-                // Vérification et correction : ajouter CRLF si manquant
-                if (buffer.find("\r\n", nextChunkPos + 2) == std::string::npos) {
-                    logMessage("ERROR", "Missing final CRLF after last chunk. Adding it.");
-                    buffer += "\r\n";
-                }
-
-                // Reconstituer la requête finale
-                std::string finalRequest = buffer.substr(0, transferEncodingPos);
-                finalRequest += "Content-Length: " + intToString(body.length());
-                finalRequest += buffer.substr(transferEncodingPos + 26, bodyStart - (transferEncodingPos + 26));
-                finalRequest += body;
-                return finalRequest;
-            }
-
-            size_t chunkDataStart = nextChunkPos + 2;
-
-            // Vérification et correction : données du chunk manquantes
-            while (buffer.size() < chunkDataStart + chunkSize + 2) {
-                bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-                if (bytes_read <= 0) {
-                    logMessage("WARNING", "Connection lost while reading chunk data");
-                    removeClient(clientIndex);
-                    return "";
-                }
-                tempBuffer[bytes_read] = '\0';
-                buffer += std::string(tempBuffer, bytes_read);
-            }
-
-            // Ajouter les données du chunk au corps
-            std::string chunkData = buffer.substr(chunkDataStart, chunkSize);
-
-            // Vérification et correction : retirer les caractères superflus
-            while (!chunkData.empty() && (chunkData[0] == '\r' || chunkData[0] == '\n')) {
-                logMessage("DEBUG", "Removing extra CRLF from chunk data.");
-                chunkData.erase(0, 1);
-            }
-
-            body += chunkData;
-
-            // Vérification et correction : CRLF après les données du chunk
-            size_t chunkEnd = chunkDataStart + chunkSize;
-            if (buffer.substr(chunkEnd, 2) != "\r\n") {
-                logMessage("ERROR", "Chunk data not properly terminated with \r\n. Adding it.");
-                buffer.insert(chunkEnd, "\r\n");
-            }
-
-            // Mise à jour de la position pour le prochain chunk
-            currentPos = chunkEnd + 2;
+            tempBuffer[bytes_read] = '\0';
+            buffer += std::string(tempBuffer, bytes_read);
+            currentBodySize += bytes_read;
         }
     }
-
     return buffer;
 }
+
+std::string Server::chunkedToBody(int client_fd, int clientIndex, std::string buffer, size_t transferEncodingPos)
+{
+    char tempBuffer[1024];
+    ssize_t bytes_read;
+    std::string body;
+    size_t bodyStart = buffer.find("\r\n\r\n") + 4;
+    size_t currentPos = bodyStart;
+
+    while (true) {
+        // Lire plus de données si nécessaire pour atteindre la taille du chunk
+        size_t nextChunkPos = buffer.find("\r\n", currentPos);
+        while (nextChunkPos == std::string::npos) {
+            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
+            if (bytes_read <= 0) {
+                logMessage("WARNING", "Connection lost while reading chunks");
+                removeClient(clientIndex);
+                return "";
+            }
+            tempBuffer[bytes_read] = '\0';
+            buffer += std::string(tempBuffer, bytes_read);
+            nextChunkPos = buffer.find("\r\n", currentPos);
+        }
+
+        // Extraire la taille du chunk en hexadécimal
+        std::string chunkSizeHex = buffer.substr(currentPos, nextChunkPos - currentPos);
+        size_t chunkSize;
+        std::istringstream(chunkSizeHex) >> std::hex >> chunkSize;
+
+        // Si la taille est nulle, la lecture est terminée
+        if (chunkSize == 0) {
+            // Avancer au-delà du chunk final et CRLF
+            currentPos = nextChunkPos + 2;
+            if (buffer.substr(currentPos, 2) != "\r\n") {
+                logMessage("ERROR", "Final chunk not properly terminated. Adding \\r\\n.");
+                buffer.insert(currentPos, "\r\n");
+            }
+            break;
+        }
+
+        // Calcul de la position de début et de fin des données du chunk
+        size_t chunkDataStart = nextChunkPos + 2;
+        size_t chunkDataEnd = chunkDataStart + chunkSize;
+
+        // Lire les données si elles ne sont pas encore toutes reçues
+        while (buffer.size() < chunkDataEnd + 2) {
+            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
+            if (bytes_read <= 0) {
+                logMessage("WARNING", "Connection lost while reading chunk data");
+                removeClient(clientIndex);
+                return "";
+            }
+            tempBuffer[bytes_read] = '\0';
+            buffer += std::string(tempBuffer, bytes_read);
+        }
+
+        // Extraire le chunk et l'ajouter au corps final
+        body += buffer.substr(chunkDataStart, chunkSize);
+
+        // Avancer la position pour le prochain chunk (sauter CRLF après les données)
+        currentPos = chunkDataEnd + 2;
+    }
+
+    // Reconstruction de la requête finale (remplacer Transfer-Encoding par Content-Length)
+    std::string finalRequest = buffer.substr(0, transferEncodingPos);
+    finalRequest += "Content-Length: " + intToString(body.length()) + "\r\n";
+    finalRequest += buffer.substr(buffer.find("\r\n", transferEncodingPos) + 2, bodyStart - (transferEncodingPos + 26));
+    finalRequest += body;
+
+    //std::cout << "Final Request:\n" << finalRequest << std::endl;
+    return finalRequest;
+}
+
+
 
 
 void Server::removeClient(int index)

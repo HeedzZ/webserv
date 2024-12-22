@@ -61,9 +61,7 @@ std::string HttpRequest::handleRequest(ServerConfig& config)
 {
     const std::vector<ServerLocation>& locations = config.getLocations();
     if (_body.size() > config.getClientMaxBodySize())
-    {
         return findErrorPage(config, 413);
-    }
     for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it)
     {
         if (_path == it->getPath())

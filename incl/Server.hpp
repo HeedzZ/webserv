@@ -71,6 +71,8 @@ private:
     void handleClientRequest(int clientIndex);
     void logResponseDetails(const std::string& response, const std::string& path);
     std::string readClientRequest(int client_fd, int clientIndex);
+    void unchunk();
+    std::string chunkedToBody(int client_fd, int clientIndex, std::string buffer, size_t transferEncodingPos);
     void removeClient(int index);
 
     // Utilitaires HTTP
