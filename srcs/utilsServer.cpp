@@ -48,7 +48,6 @@ bool Server::parseConfigFile(const std::string& configFile)
             std::auto_ptr<ServerConfig> currentConfig(new ServerConfig());
             if (currentConfig->parseServerBlock(file))
                 _configs.push_back(*currentConfig);
-            _configs[0].display();
         }
     }
     catch (const std::runtime_error& e)

@@ -15,7 +15,6 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
         if (line.empty() || line[0] == '#')
             continue;
 
-        std::cout << line << std::endl;
         std::string token;
         std::istringstream iss(line);
         iss >> token;
