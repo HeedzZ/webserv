@@ -195,7 +195,7 @@ std::string HttpRequest::handlePost(ServerConfig& config)
 
     const std::vector<ServerLocation>& locations = config.getLocations();
     for (std::vector<ServerLocation>::const_iterator it = locations.begin(); it != locations.end(); ++it) {
-        if ("/post" == it->getPath())
+        if ("/post" == it->getPath() && _path != "/cgi-bin/auth.py")
         {
             if (!it->isPostAllowed())
                 return findErrorPage(config, 405);
