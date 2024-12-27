@@ -197,27 +197,81 @@ std::string HttpRequest::handleParentProcess(int outputPipe[2], int inputPipe[2]
 std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig& config)
 {
     (void)config;
-    
+
     try
     {
         int outputPipe[2], inputPipe[2];
         createPipes(outputPipe, inputPipe);
 
         pid_t pid = fork();
-        if (pid == 0)
+        if (pid == 0)  // Processus enfant (CGI)
+        {
             setupChildProcess(outputPipe, inputPipe, scriptPath);
-        else if (pid > 0)
-            return handleParentProcess(outputPipe, inputPipe, pid);
+        }
+        else if (pid > 0)  // Processus parent (serveur)
+        {
+            close(outputPipe[1]);
+            close(inputPipe[0]);
+
+            // Envoyer le corps de la requête (si POST)
+            write(inputPipe[1], _body.c_str(), _body.size());
+            close(inputPipe[1]);
+
+            std::string output;
+            char buffer[1024];
+            ssize_t bytesRead;
+            int status;
+            int elapsedTime = 0;
+
+            // Timeout de 5 secondes pour le CGI
+            while (elapsedTime < 5)
+            {
+                // Vérifier si le processus CGI a terminé (non bloquant)
+                pid_t result = waitpid(pid, &status, WNOHANG);
+                
+                if (result == pid)  // CGI terminé
+                {
+                    while ((bytesRead = read(outputPipe[0], buffer, sizeof(buffer) - 1)) > 0)
+                    {
+                        buffer[bytesRead] = '\0';
+                        output += buffer;
+                    }
+                    close(outputPipe[0]);
+                    
+                    return constructCGIResponse(output);
+                }
+                else if (result == 0)  // CGI en cours
+                {
+                    usleep(500000);  // Attendre 500 ms (0.5 seconde)
+                    elapsedTime++;
+                }
+                else  // Erreur avec waitpid
+                {
+                    throw std::runtime_error("Erreur lors de l'attente du processus CGI");
+                }
+            }
+
+            // Timeout atteint -> tuer le processus CGI
+            kill(pid, SIGKILL);
+            waitpid(pid, NULL, 0);  // Éviter les processus zombies
+            close(outputPipe[0]);
+
+            return findErrorPage(config,504);  // 504 Gateway Timeout
+        }
         else
+        {
             throw std::runtime_error("Fork failed");
+        }
     }
     catch (const std::exception& e)
     {
         std::cerr << "Erreur CGI : " << e.what() << std::endl;
         return generateDefaultErrorPage(500);
     }
+
     return generateDefaultErrorPage(500);
 }
+
 
 
 std::string HttpRequest::handlePost(ServerConfig& config)

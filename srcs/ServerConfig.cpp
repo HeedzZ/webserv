@@ -165,6 +165,7 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
     {
         setErrorPage(404, ("main/errors/404.html"));
         setErrorPage(500, ("main/errors/500.html"));
+        setErrorPage(504, ("main/errors/504.html"));
         setErrorPage(411, ("main/errors/411.html"));
         setErrorPage(400, ("main/errors/400.html"));
         setErrorPage(403, ("main/errors/403.html"));
