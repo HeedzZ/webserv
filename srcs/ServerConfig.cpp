@@ -1,6 +1,26 @@
 #include "ServerConfig.hpp"
 #include <iostream>
 
+void ServerConfig::skipToNextServerBlock(std::ifstream& filepath)
+{
+    std::string line;
+    while (std::getline(filepath, line))
+    {
+        line = line.substr(line.find_first_not_of(" \t"));
+        
+        // Ignorer les commentaires et lignes vides
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        // Si 'server {' est trouvé, laisser la ligne à analyser par parseServerBlock
+        if (line.find("}") != std::string::npos && line.size() == 1)
+        {
+            return;  // Arrêter de sauter, le bloc sera analysé correctement
+        }
+    }
+}
+
+
 ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
 {
     std::string line;
@@ -31,8 +51,12 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
                     continue;
                 }
                 else
+                {
+                    skipToNextServerBlock(filepath);
                     throw std::runtime_error("Expected '{' after 'server'. Line: " + line);
+                }
             }
+            skipToNextServerBlock(filepath);
             throw std::runtime_error("Expected 'server {' to start a server block. Line: " + line);
         }
 
@@ -47,7 +71,10 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
             if (blockDepth == 0)
             {
                 if (!_hasListen || !_hasRoot)
+                {
+                    skipToNextServerBlock(filepath);
                     throw std::runtime_error("Missing essential configuration parameters (listen/root).");
+                }
                 return this;
             }
             if (inLocationBlock && blockDepth == 1)
@@ -64,7 +91,10 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
             }
 
             if (blockDepth < 0)
+            {
+                skipToNextServerBlock(filepath);
                 throw std::runtime_error("Unmatched closing brace '}'.");
+            }
             continue;
         }
         if (!inLocationBlock)
@@ -79,12 +109,15 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
                 continue;
             }
             if (!processServerOrLocation(token, iss, line, currentLocation, inLocationBlock))
+            {
+                skipToNextServerBlock(filepath);
                 throw std::runtime_error("Invalid directive in server block: " + line);
+            }
         }
         else
             parseLocationDirective(token, line, currentLocation, inLocationBlock);
     }
-
+    skipToNextServerBlock(filepath);
     throw std::runtime_error("Unexpected end of file. Missing '}' for server block.");
 }
 

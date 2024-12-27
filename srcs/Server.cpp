@@ -283,7 +283,7 @@ void Server::handleClientRequest(int clientIndex)
     }
 
     std::string response = request.handleRequest(*config);
-    std::cout << response << std::endl;
+    //std::cout << response << std::endl;
     logMessage("INFO", request.getMethod() + " " + request.getPath() + " " + request.getHttpVersion() + + "\" " + intToString(request.extractStatusCode(response)) + " " + intToString(response.size()) + " \"" + request.getHeaderValue("User-Agent") + "\"");
     
     ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);

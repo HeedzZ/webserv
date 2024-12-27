@@ -40,27 +40,23 @@ bool Server::parseConfigFile(const std::string& configFile)
         std::cerr << "Could not open the file: " << configFile << std::endl;
         return false;
     }
-
-    try
-    {
         while (file.peek() != EOF)
         {
-            std::auto_ptr<ServerConfig> currentConfig(new ServerConfig());
-            if (currentConfig->parseServerBlock(file))
-                _configs.push_back(*currentConfig);
+            try
+            {
+                std::auto_ptr<ServerConfig> currentConfig(new ServerConfig());
+                if (currentConfig->parseServerBlock(file))
+                    _configs.push_back(*currentConfig);
+            }
+            catch (const std::runtime_error& e)
+            {
+                std::cerr << "Configuration error: " << e.what() << std::endl;
+            }
+            catch (...)
+            {
+                std::cerr << "Unexpected error while parsing configuration." << std::endl;
+            }
         }
-    }
-    catch (const std::runtime_error& e)
-    {
-        std::cerr << "Configuration error: " << e.what() << std::endl;
-        return false;
-    }
-    catch (...)
-    {
-        std::cerr << "Unexpected error while parsing configuration." << std::endl;
-        return false;
-    }
-
     return !_configs.empty();
 }
 
