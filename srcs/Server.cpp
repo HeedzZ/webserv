@@ -61,9 +61,9 @@ void Server::initSockets()
                 address.sin_addr.s_addr = inet_addr(host.c_str());
                 address.sin_port = htons(ports[j]);
 
-                if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0)
-                {
+                if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
                     close(server_fd);
+                    _server_fds.erase(std::remove(_server_fds.begin(), _server_fds.end(), server_fd), _server_fds.end());
                     throw std::runtime_error("Failed to bind socket for host: " + host);
                 }
 
@@ -106,7 +106,7 @@ void Server::addServerSocketToPoll(int server_fd)
 {
     struct pollfd server_poll_fd = {};
     server_poll_fd.fd = server_fd;
-    server_poll_fd.events = POLLIN;
+    server_poll_fd.events = POLLIN | POLLOUT;
     _poll_fds.push_back(server_poll_fd);
     _server_fds.push_back(server_fd);
 }
@@ -283,9 +283,14 @@ void Server::handleClientRequest(int clientIndex)
     }
 
     std::string response = request.handleRequest(*config);
+    std::cout << response << std::endl;
     logMessage("INFO", request.getMethod() + " " + request.getPath() + " " + request.getHttpVersion() + + "\" " + intToString(request.extractStatusCode(response)) + " " + intToString(response.size()) + " \"" + request.getHeaderValue("User-Agent") + "\"");
-    send(client_fd, response.c_str(), response.size(), 0);
-
+    
+    ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
+    if (bytes_sent == -1 || bytes_sent == 0) {
+        logMessage("ERROR", "Failed to send data to client.");
+        removeClient(clientIndex);
+    }
 }
 
 std::string Server::readClientRequest(int client_fd, int clientIndex) {
@@ -293,21 +298,22 @@ std::string Server::readClientRequest(int client_fd, int clientIndex) {
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    // Lecture initiale pour capturer les en-têtes
     while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0) {
         tempBuffer[bytes_read] = '\0';
         buffer += std::string(tempBuffer, bytes_read);
-
-        // Si les en-têtes sont entièrement reçus (double CRLF)
         if (buffer.find("\r\n\r\n") != std::string::npos)
             break;
     }
-    //std::cout << "Buffer (initial) :\n" << buffer << std::endl;
-
-    if (bytes_read <= 0) {
+    if (bytes_read == 0) {
+        logMessage("INFO", "Client closed the connection.");
+        removeClient(clientIndex);
+        return "";
+    } else if (bytes_read == -1) {
+        logMessage("ERROR", "Read error on client socket: " + std::string(strerror(errno)));
         removeClient(clientIndex);
         return "";
     }
+
 
     // Vérification de Transfer-Encoding: chunked
     size_t transferEncodingPos = buffer.find("Transfer-Encoding: chunked");

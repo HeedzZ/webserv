@@ -81,16 +81,46 @@ std::string HttpRequest::handleRequest(ServerConfig& config)
 std::string HttpRequest::handleGet(ServerConfig& config)
 {
     std::string fullPath = resolveFilePath(config);
-    if (!isFileAccessible(fullPath))
-        return findErrorPage(config, 404);
+    
+    // Vérifie si le chemin est valide (fichier ou dossier)
+    struct stat fileStat;
+    if (stat(fullPath.c_str(), &fileStat) != 0)
+        return findErrorPage(config, 404);  // Fichier non trouvé (404)
 
+    // Si c'est un répertoire, tenter de charger index.html
+    if (S_ISDIR(fileStat.st_mode))
+    {
+        std::string indexPath = fullPath + "/index.html";
+        if (access(indexPath.c_str(), F_OK) != 0)
+            return findErrorPage(config, 403);  // Aucun index.html -> 403 Forbidden
+        fullPath = indexPath;
+    }
+
+    // Vérifie que le fichier est accessible
+    if (!isFileAccessible(fullPath))
+        return findErrorPage(config, 404);  // Fichier inaccessible (404)
+
+    // Si c'est un script Python CGI, exécuter le CGI
     if (fullPath.find(".py") != std::string::npos && fullPath.find("/var/www/upload/") == std::string::npos)
         return executeCGI(fullPath, config);
 
+    // Lire le fichier (contenu)
     std::string fileContent = readFile(fullPath);
-    if (fileContent.empty())
-        return findErrorPage(config, 500);
 
+    // Si le fichier est vide (mais existant), retourner 200 OK avec un corps vide
+    if (fileContent.empty() && S_ISREG(fileStat.st_mode))
+    {
+        std::string response = "HTTP/1.1 204 No Content\r\n";
+        response += "Content-Length: 0\r\n";
+        response += "Connection: close\r\n\r\n";
+        return response;
+    }
+
+    // Si la lecture a échoué pour d'autres raisons
+    if (fileContent.empty())
+        return findErrorPage(config, 500);  // Erreur interne (500)
+
+    // Construire la réponse HTTP pour les fichiers normaux
     std::ostringstream oss;
     oss << fileContent.size();
 
@@ -188,6 +218,7 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
     }
     return generateDefaultErrorPage(500);
 }
+
 
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
