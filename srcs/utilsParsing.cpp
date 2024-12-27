@@ -1,7 +1,7 @@
 #include "ServerConfig.hpp"
 #include <iostream>
 
-ServerConfig::ServerConfig() : root("var/www/main"), index("index.html"), _host("127.0.0.1"), _hasListen(false), _hasRoot(false), _valid(true), clientMaxBodySize(100000000)
+ServerConfig::ServerConfig() : root("var/www/main"), index("index.html"), _host("127.0.0.1"), _hasListen(false), _hasRoot(false), _valid(true), clientMaxBodySize(100000000), _insideLimitExcept(false)
 {}
 
 void ServerConfig::setPort(int serverPort)

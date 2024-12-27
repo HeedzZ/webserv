@@ -3,23 +3,8 @@
 #include <sstream>
 #include <algorithm>
 
-ServerLocation::ServerLocation(const std::string& path) : path(path), allowGet(true), allowPost(true), allowDelete(true)
+ServerLocation::ServerLocation(const std::string& path) : path(path), _getAllowed(true), _postAllowed(true), _deleteAllowed(true)
 {}
-
-bool ServerLocation::isGetAllowed() const
-{
-    return allowGet;
-}
-
-bool ServerLocation::isPostAllowed() const
-{
-    return allowPost;
-}
-
-bool ServerLocation::isDeleteAllowed() const
-{
-    return allowDelete;
-}
 
 const std::string& ServerLocation::getPath() const
 {
@@ -56,7 +41,44 @@ const std::map<std::string, std::string>& ServerLocation::getCgiExtensions() con
     return cgi_extensions;
 }
 
-void ServerLocation::setAllowedMethods(const std::string& methodsLine)
+void ServerLocation::disableAllMethods()
+{
+    _getAllowed = false;
+    _postAllowed = false;
+    _deleteAllowed = false;
+}
+
+void ServerLocation::allowGet()
+{
+    _getAllowed = true;
+}
+
+void ServerLocation::allowPost()
+{
+    _postAllowed = true;
+}
+
+void ServerLocation::allowDelete()
+{
+    _deleteAllowed = true;
+}
+
+bool ServerLocation::isGetAllowed() const
+{
+    return _getAllowed;
+}
+
+bool ServerLocation::isPostAllowed() const
+{
+    return _postAllowed;
+}
+
+bool ServerLocation::isDeleteAllowed() const
+{
+    return _deleteAllowed;
+}
+
+/*void ServerLocation::setAllowedMethods(const std::string& methodsLine)
 {
     allowGet = false;
     allowPost = false;
@@ -75,7 +97,7 @@ void ServerLocation::setAllowedMethods(const std::string& methodsLine)
         else if (method == "DELETE")
             allowDelete = true;
     }
-}
+}*/
 
 void ServerLocation::display() const
 {
@@ -90,9 +112,9 @@ void ServerLocation::display() const
     std::cout << "index : " << index << std::endl;
 
     std::cout << "Allowed Methods:\n";
-    std::cout << "  GET: " << (allowGet ? "Yes" : "No") << std::endl;
-    std::cout << "  POST: " << (allowPost ? "Yes" : "No") << std::endl;
-    std::cout << "  DELETE: " << (allowDelete ? "Yes" : "No") << std::endl;
+    std::cout << "  GET: " << (_getAllowed ? "Yes" : "No") << std::endl;
+    std::cout << "  POST: " << (_postAllowed ? "Yes" : "No") << std::endl;
+    std::cout << "  DELETE: " << (_deleteAllowed ? "Yes" : "No") << std::endl;
 
     std::cout << "-----------------------\n";
     std::cout << "-----------------------\n";

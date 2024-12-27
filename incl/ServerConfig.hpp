@@ -21,6 +21,7 @@ private:
     int                            _hasRoot;
     int                            _valid;
     size_t                         clientMaxBodySize;
+    bool                           _insideLimitExcept;
 public:
     // Default constructor
     ServerConfig();

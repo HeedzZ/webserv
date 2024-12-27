@@ -10,9 +10,9 @@ private:
     std::string root;
     std::string index;
     std::map<std::string, std::string> cgi_extensions;
-    bool allowGet;
-    bool allowPost;
-    bool allowDelete;
+    bool _getAllowed;
+    bool _postAllowed;
+    bool _deleteAllowed;
 
 public:
     // Constructor
@@ -29,6 +29,10 @@ public:
     void addCgiExtension(const std::string& extension, const std::string& program);
     const std::map<std::string, std::string>& getCgiExtensions() const;
     
+    void disableAllMethods();
+    void allowGet();
+    void allowPost();
+    void allowDelete();
     bool isGetAllowed() const;
     bool isPostAllowed() const;
     bool isDeleteAllowed() const;

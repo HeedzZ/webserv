@@ -16,6 +16,7 @@
 #include "ServerConfig.hpp"
 #include <sys/stat.h>
 #include "ServerLocation.hpp"
+#include <ctime>
 
 class HttpRequest
 {
@@ -29,10 +30,9 @@ private:
 public:
 	HttpRequest(const std::string rawRequest);
 	~HttpRequest();
-	//Handle GET fonctions :
+
 	std::string handleRequest(ServerConfig& config);
 	std::string resolveFilePath(const ServerConfig& config);
-	bool 		isFileAccessible(const std::string& filePath);
 	std::string readFile(const std::string& filePath);
 	std::string handleGet(ServerConfig& config);
 	std::string	handlePost(ServerConfig& config);
@@ -46,16 +46,21 @@ public:
 	std::string getMethod() const;
 	std::string getHeaderValue(const std::string& headerName) const;
 	std::string getHttpVersion(void);
-	int extractStatusCode(const std::string& response);
-	std::string intToString(int value);
-	//Execute CGI fonctions :
-	void createPipes(int outputPipe[2], int inputPipe[2]);
-	void setupChildProcess(int outputPipe[2], int inputPipe[2], const std::string& scriptPath);
-	void setupCGIEnvironment(const std::string& scriptPath);
 	std::string handleParentProcess(int outputPipe[2], int inputPipe[2], pid_t pid);
 	std::string constructCGIResponse(const std::string& output);
 	std::string executeCGI(const std::string& scriptPath, ServerConfig& config);
 	std::string generateDefaultErrorPage(int errorCode);
+	std::string intToString(int value);
+	std::string extractJsonValue(const std::string& json, const std::string& key);
+
+	void createPipes(int outputPipe[2], int inputPipe[2]);
+	void setupChildProcess(int outputPipe[2], int inputPipe[2], const std::string& scriptPath);
+	void setupCGIEnvironment(const std::string& scriptPath);
+
+	bool ensureUploadDirectoryExists();
+	bool isFileAccessible(const std::string& filePath);
+
+	int extractStatusCode(const std::string& response);
 };
 
 #endif

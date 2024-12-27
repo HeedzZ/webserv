@@ -15,6 +15,7 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
         if (line.empty() || line[0] == '#')
             continue;
 
+        std::cout << line << std::endl;
         std::string token;
         std::istringstream iss(line);
         iss >> token;
@@ -38,6 +39,11 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
 
         if (token == "}")
         {
+            if (_insideLimitExcept)
+            {
+                _insideLimitExcept = false;
+                continue;
+            }
             blockDepth--;
             if (blockDepth == 0)
             {
@@ -45,9 +51,9 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
                     throw std::runtime_error("Missing essential configuration parameters (listen/root).");
                 return this;
             }
-
             if (inLocationBlock && blockDepth == 1)
             {
+                // Fin du bloc `location`
                 inLocationBlock = false;
                 if (currentLocation)
                 {
@@ -57,9 +63,11 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
                 }
                 continue;
             }
+
+            if (blockDepth < 0)
+                throw std::runtime_error("Unmatched closing brace '}'.");
             continue;
         }
-
         if (!inLocationBlock)
         {
             if (token == "location" && line.find('{') != std::string::npos)
@@ -71,14 +79,11 @@ ServerConfig* ServerConfig::parseServerBlock(std::ifstream& filepath)
                 currentLocation = new ServerLocation(locationPath);
                 continue;
             }
-
             if (!processServerOrLocation(token, iss, line, currentLocation, inLocationBlock))
                 throw std::runtime_error("Invalid directive in server block: " + line);
         }
         else
             parseLocationDirective(token, line, currentLocation, inLocationBlock);
-        if (token == "client_max_body_size")
-            handleClientMaxBodySizeDirective(iss, line);
     }
 
     throw std::runtime_error("Unexpected end of file. Missing '}' for server block.");
@@ -123,9 +128,7 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
         hasListen++;
     }
     else if (token == "root")
-    {
         return parseRootDirective(iss, hasRoot);
-    }
     else if (token == "index")
     {
         std::string indexPage;
@@ -147,7 +150,8 @@ bool ServerConfig::parseServerDirective(const std::string& token, std::istringst
         std::string hostValue;
         iss >> hostValue;
         hostValue.resize(hostValue.size() - 1);
-        if (hostValue.empty()) {
+        if (hostValue.empty())
+        {
             throw std::runtime_error("Host value is missing in configuration.");
             return false;
         }
@@ -216,17 +220,55 @@ bool ServerConfig::parseErrorPageDirective(std::istringstream& iss)
     return true;
 }
 
-void ServerConfig::parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock)
-{
+void ServerConfig::parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock) {
     if (token == "limit_except")
     {
-        std::string methods = line.substr(line.find("limit_except") + 12);
-        currentLocation->setAllowedMethods(methods);
+        if (_insideLimitExcept)
+            throw std::runtime_error("Nested limit_except blocks are not allowed.");
+
+        _insideLimitExcept = true;
+        currentLocation->disableAllMethods(); // Désactiver toutes les méthodes par défaut
+
+        size_t startPos = line.find("limit_except") + 12;
+        size_t endPos = line.find('{'); // Trouver la position de '{'
+        if (endPos == std::string::npos)
+            throw std::runtime_error("Missing '{' after limit_except");
+
+        std::istringstream iss(line.substr(startPos, endPos - startPos));
+        std::string method;
+        while (iss >> method)
+        {
+            if (method == "GET")
+                currentLocation->allowGet();
+            else if (method == "POST")
+                currentLocation->allowPost();
+            else if (method == "DELETE")
+                currentLocation->allowDelete();
+            else
+                throw std::runtime_error("Invalid method in limit_except: " + method);
+        }
+    }
+    else if (token == "deny" && _insideLimitExcept)
+    {
+        std::istringstream iss(line);
+        std::string directive, value;
+        iss >> directive >> value;
+        if (directive != "deny" || value != "all;")
+            throw std::runtime_error("Invalid directive in limit_except: " + line);
+    }
+    else if (token == "}")
+    {
+        if (inLocationBlock && _insideLimitExcept)
+            _insideLimitExcept = false; // Fin du bloc limit_except
+        else if (inLocationBlock && !_insideLimitExcept)
+            inLocationBlock = false; // Fin du bloc location
+        else
+            throw std::runtime_error("Unmatched '}' detected.");
     }
     else if (token == "root")
     {
         std::string rootValue = line.substr(line.find(token) + token.length() + 1);
-        rootValue.resize(rootValue.size() - 2);
+        rootValue.resize(rootValue.size() - 2); // Supprimer le point-virgule
         currentLocation->setRoot(rootValue);
 
         std::ifstream testFile(rootValue.c_str());
@@ -235,8 +277,8 @@ void ServerConfig::parseLocationDirective(const std::string& token, const std::s
     }
     else if (token == "index")
         parseIndexDirective(line, currentLocation);
-    else if (token == "}")
-        inLocationBlock = false;
+    else
+        throw std::runtime_error("Unknown directive in location block: " + token);
 }
 
 void ServerConfig::parseIndexDirective(const std::string& line, ServerLocation* currentLocation)
