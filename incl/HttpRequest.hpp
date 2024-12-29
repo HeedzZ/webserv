@@ -55,7 +55,7 @@ public:
 
 	void createPipes(int outputPipe[2], int inputPipe[2]);
 	void setupChildProcess(int outputPipe[2], int inputPipe[2], const std::string& scriptPath);
-	void setupCGIEnvironment(const std::string& scriptPath);
+	std::vector<char*> setupCGIEnvironment(const std::string& scriptPath);
 
 	bool ensureUploadDirectoryExists();
 	bool isFileAccessible(const std::string& filePath);

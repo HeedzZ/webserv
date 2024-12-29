@@ -54,6 +54,7 @@ public:
 	int	getValid() const;
     std::string toString() const;
 
+    void skipToNextServerBlock(std::ifstream& filepath);
 	ServerConfig* parseServerBlock(std::ifstream& filepath);
     void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);
     bool parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot);

@@ -107,16 +107,28 @@ std::string HttpRequest::constructCGIResponse(const std::string& output)
     return response;
 }
 
-void HttpRequest::setupCGIEnvironment(const std::string& scriptPath)
+std::vector<char*> HttpRequest::setupCGIEnvironment(const std::string& scriptPath)
 {
-    setenv("REQUEST_METHOD", _method.c_str(), 1);
-    setenv("SCRIPT_FILENAME", scriptPath.c_str(), 1);
-    setenv("CONTENT_LENGTH", intToString(_body.size()).c_str(), 1);
-    setenv("CONTENT_TYPE", _headers["Content-Type"].c_str(), 1);
-    setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
-    setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
-    setenv("REDIRECT_STATUS", "200", 1);
+    std::vector<std::string> envVars;
+
+    envVars.push_back("REQUEST_METHOD=" + _method);
+    envVars.push_back("SCRIPT_FILENAME=" + scriptPath);
+    envVars.push_back("CONTENT_LENGTH=" + intToString(_body.size()));
+    envVars.push_back("CONTENT_TYPE=" + _headers["Content-Type"]);
+    envVars.push_back("GATEWAY_INTERFACE=CGI/1.1");
+    envVars.push_back("SERVER_PROTOCOL=HTTP/1.1");
+    envVars.push_back("REDIRECT_STATUS=200");
+
+    std::vector<char*> env;
+    for (size_t i = 0; i < envVars.size(); ++i)
+    {
+        env.push_back(strdup(envVars[i].c_str()));
+    }
+    env.push_back(NULL);
+
+    return env;
 }
+
 
 void HttpRequest::createPipes(int outputPipe[2], int inputPipe[2])
 {

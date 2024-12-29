@@ -93,6 +93,8 @@ private:
     std::vector<pollfd> _poll_fds;     // Liste des descripteurs pour poll
     std::vector<ServerConfig> _configs;
     std::map<int, ServerConfig*> _socketToConfig;
+    std::map<int, std::string> responseBuffer;
+    std::map<int, std::string> clientBuffers;
 
     // Variable statique pour gérer les signaux
     static volatile sig_atomic_t signal_received;
