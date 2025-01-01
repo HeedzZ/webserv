@@ -198,12 +198,6 @@ void Server::run()
             continue;
         }
 
-        if (poll_count == 0)
-        {
-            logMessage("DEBUG", "Poll timeout expired (should not happen with -1 timeout).");
-            continue;
-        }
-
         for (size_t i = 0; i < _poll_fds.size(); ++i)
         {
             if (_poll_fds[i].revents & POLLIN)
@@ -213,7 +207,26 @@ void Server::run()
                 else
                     handleClientRequest(i);
             }
-            _poll_fds[i].revents = 0;
+            if (_poll_fds[i].revents & POLLOUT)
+            {
+                int client_fd = _poll_fds[i].fd;
+                if (responseBuffer.find(client_fd) != responseBuffer.end())
+                {
+                    const std::string& response = responseBuffer[client_fd];
+                    ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
+                    
+                    if (bytes_sent == -1 || bytes_sent == 0)
+                    {
+                        logMessage("ERROR", "Failed to send data to client " + intToString(client_fd));
+                        removeClient(i);
+                    }
+                    else
+                    {
+                        responseBuffer.erase(client_fd);
+                        _poll_fds[i].events &= ~POLLOUT;  // Désactiver l'écriture
+                    }
+                }
+            }
         }
     }
 }
@@ -256,11 +269,12 @@ void Server::handleClientRequest(int clientIndex)
     int client_fd = _poll_fds[clientIndex].fd;
 
     std::string buffer = readClientRequest(client_fd, clientIndex);
+
+    // Si la requête est vide (incomplète), on attend plus de données
     if (buffer.empty()) return;
 
+    // Si la requête est complète, on la traite
     HttpRequest request(buffer);
-
-	//std::cout << buffer << std::endl;
     std::string hostHeader = request.getHeaderValue("Host");
 
     int connectedPort = -1;
@@ -268,80 +282,90 @@ void Server::handleClientRequest(int clientIndex)
     socklen_t addrLen = sizeof(addr);
     if (getsockname(client_fd, (struct sockaddr*)&addr, &addrLen) == 0) {
         connectedPort = ntohs(addr.sin_port);
-    } else {
-        logMessage("ERROR", "Failed to get connected port for client FD: " + intToString(client_fd));
-        removeClient(clientIndex);
-        return;
     }
 
     ServerConfig* config = getConfigForRequest(hostHeader, connectedPort);
-
     if (!config) {
-        logMessage("ERROR", "No matching configuration found for Host: " + hostHeader);
+        logMessage("ERROR", "No configuration found for client " + intToString(client_fd));
         removeClient(clientIndex);
         return;
     }
 
-    std::string response = request.handleRequest(*config);
-    //std::cout << response << std::endl;
-    logMessage("INFO", request.getMethod() + " " + request.getPath() + " " + request.getHttpVersion() + + "\" " + intToString(request.extractStatusCode(response)) + " " + intToString(response.size()) + " \"" + request.getHeaderValue("User-Agent") + "\"");
-    
-    ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
-    if (bytes_sent == -1 || bytes_sent == 0) {
-        logMessage("ERROR", "Failed to send data to client.");
+    try {
+        std::string response = request.handleRequest(*config);
+         logMessage("INFO", request.getMethod() + " " + request.getPath() + " " + request.getHttpVersion() + + "\" " + intToString(request.extractStatusCode(response)) + " " + intToString(response.size()) + " \"" + request.getHeaderValue("User-Agent") + "\"");
+        responseBuffer[client_fd] = response;
+        _poll_fds[clientIndex].events |= POLLOUT;  // Marquer pour écriture
+    }
+    catch (const std::exception& e) {
+        logMessage("ERROR", "Failed to handle request for client " + intToString(client_fd));
         removeClient(clientIndex);
     }
 }
 
-std::string Server::readClientRequest(int client_fd, int clientIndex) {
-    std::string buffer;
+
+std::string Server::readClientRequest(int client_fd, int clientIndex)
+{
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    while ((bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1)) > 0) {
+    // Lecture non bloquante (MSG_DONTWAIT)
+    bytes_read = recv(client_fd, tempBuffer, sizeof(tempBuffer) - 1, MSG_DONTWAIT);
+
+    if (bytes_read > 0)
+    {
         tempBuffer[bytes_read] = '\0';
-        buffer += std::string(tempBuffer, bytes_read);
-        if (buffer.find("\r\n\r\n") != std::string::npos)
-            break;
-    }
-    if (bytes_read == 0) {
-        logMessage("INFO", "Client closed the connection.");
-        removeClient(clientIndex);
-        return "";
-    } else if (bytes_read == -1) {
-        logMessage("ERROR", "Read error on client socket: " + std::string(strerror(errno)));
-        removeClient(clientIndex);
-        return "";
-    }
+        clientBuffers[client_fd] += std::string(tempBuffer, bytes_read);  // Accumule la requête
 
+        // Vérifie si les headers sont complets (fin par \r\n\r\n)
+        if (clientBuffers[client_fd].find("\r\n\r\n") != std::string::npos || clientBuffers[client_fd].find("\n\n") != std::string::npos)
+        {
+            size_t contentLengthPos = clientBuffers[client_fd].find("Content-Length:");
+            
+            if (contentLengthPos != std::string::npos) {
+                // Lire la longueur du corps
+                size_t start = clientBuffers[client_fd].find(" ", contentLengthPos) + 1;
+                size_t end = clientBuffers[client_fd].find("\r\n", contentLengthPos);
+                int contentLength = std::atoi(clientBuffers[client_fd].substr(start, end - start).c_str());
 
-    // Vérification de Transfer-Encoding: chunked
-    size_t transferEncodingPos = buffer.find("Transfer-Encoding: chunked");
-    if (transferEncodingPos != std::string::npos)
-        return (chunkedToBody(client_fd, clientIndex, buffer, transferEncodingPos));
+                // Calculer la taille actuelle du corps
+                size_t currentBodySize = clientBuffers[client_fd].size() - clientBuffers[client_fd].find("\r\n\r\n") - 4;
 
-    size_t contentLengthPos = buffer.find("Content-Length:");
-    if (contentLengthPos != std::string::npos) {
-        size_t start = buffer.find(" ", contentLengthPos) + 1;
-        size_t end = buffer.find("\r\n", contentLengthPos);
-        int contentLength = std::atoi(buffer.substr(start, end - start).c_str());
-
-        // Lire le corps s'il reste des données
-        size_t currentBodySize = buffer.size() - buffer.find("\r\n\r\n") - 4;
-        while (currentBodySize < static_cast<size_t>(contentLength)) {
-            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-            if (bytes_read <= 0) {
-                logMessage("WARNING", "Client disconnected before sending complete body.");
-                removeClient(clientIndex);
-                return "";
+                // Si le corps est complet, retourner la requête complète
+                if (currentBodySize >= static_cast<size_t>(contentLength))
+                {
+                    std::string completeRequest = clientBuffers[client_fd];
+                    clientBuffers.erase(client_fd);  // Nettoyage après traitement complet
+                    return completeRequest;
+                }
             }
-            tempBuffer[bytes_read] = '\0';
-            buffer += std::string(tempBuffer, bytes_read);
-            currentBodySize += bytes_read;
+            else
+            {
+                // Requête sans corps (GET)
+                std::string completeRequest = clientBuffers[client_fd];
+                clientBuffers.erase(client_fd);
+                return completeRequest;
+            }
         }
     }
-    return buffer;
+    else if (bytes_read == 0)
+    {
+        // Client a fermé la connexion
+        logMessage("INFO", "Client closed the connection.");
+        removeClient(clientIndex);
+    }
+    else if (bytes_read == -1 && (errno != EAGAIN && errno != EWOULDBLOCK))
+    {
+        // Erreur critique de lecture
+        logMessage("ERROR", "Read error on client socket: " + std::string(strerror(errno)));
+        removeClient(clientIndex);
+    }
+
+    // Retourne une chaîne vide si la requête est incomplète
+    return "";
 }
+
+
 
 std::string Server::chunkedToBody(int client_fd, int clientIndex, std::string buffer, size_t transferEncodingPos)
 {
@@ -422,12 +446,20 @@ void Server::removeClient(int index)
 {
     int client_fd = _poll_fds[index].fd;
 
-    if (_socketToConfig.find(client_fd) != _socketToConfig.end())
-        _socketToConfig.erase(client_fd);
+    if (responseBuffer.find(client_fd) != responseBuffer.end()) {
+        responseBuffer.erase(client_fd);
+    }
 
-    if (client_fd != -1)
+    if (_socketToConfig.find(client_fd) != _socketToConfig.end()) {
+        _socketToConfig.erase(client_fd);
+    }
+
+    if (client_fd != -1) {
         close(client_fd);
+    }
+
     _poll_fds.erase(_poll_fds.begin() + index);
+    logMessage("INFO", "Client " + intToString(client_fd) + " disconnected and cleaned up.");
 }
 
 void Server::stop()

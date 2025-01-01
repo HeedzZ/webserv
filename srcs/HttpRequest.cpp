@@ -157,10 +157,13 @@ void HttpRequest::setupChildProcess(int outputPipe[2], int inputPipe[2], const s
     }
     close(inputPipe[0]);
 
-    setupCGIEnvironment(scriptPath);
+    std::vector<char*> env = setupCGIEnvironment(scriptPath);
 
     char* args[] = {(char*)"/usr/bin/python3", (char*)scriptPath.c_str(), NULL};
-    execve("/usr/bin/python3", args, environ);
+    execve("/usr/bin/python3", args, env.data());
+    for (size_t i = 0; i < env.size(); ++i)
+        free(env[i]);
+
 
     perror("Erreur d'exécution du script CGI");
     exit(1);
