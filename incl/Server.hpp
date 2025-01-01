@@ -35,7 +35,7 @@
 class Server {
 public:
     // Constructeur et destructeur
-    Server(const std::string& configFile);
+    Server(const std::string configFile);
     ~Server();
 
     // Méthodes principales
@@ -56,7 +56,10 @@ public:
     ServerConfig* getConfigForRequest(const std::string& hostHeader, int connectedPort);
 
 private:
-    bool parseConfigFile(const std::string& configFile);
+    bool parseConfigFile(std::string configFile);
+    void printServerBlocks() const;
+    bool parseFileInBlock(std::string configFile);
+
     // Helpers pour les sockets
     int createSocket();
     void configureSocket(int server_fd);
@@ -91,7 +94,10 @@ private:
     std::vector<int> _ports;           // Liste des ports en écoute
     std::vector<sockaddr_in> _addresses; // Adresses des sockets
     std::vector<pollfd> _poll_fds;     // Liste des descripteurs pour poll
+
+    std::vector<std::string> serverBlocks;
     std::vector<ServerConfig> _configs;
+
     std::map<int, ServerConfig*> _socketToConfig;
 
     // Variable statique pour gérer les signaux

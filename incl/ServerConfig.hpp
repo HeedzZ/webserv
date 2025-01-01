@@ -1,30 +1,41 @@
 #ifndef SERVERCONFIG_HPP
 #define SERVERCONFIG_HPP
 
+#include "ServerLocation.hpp"
 #include <string>
 #include <vector>
 #include <map>
-#include "ServerLocation.hpp"
 #include <fstream>
 #include <sstream>
+#include <iostream>
+#include <stdexcept>
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 
 class ServerConfig {
 private:
-    std::vector<int>               ports;                   // Server listening port
-    std::string                    root;                         // Server root directory
-    std::string                    index;                        // Default index file
-    std::map<int, std::string>     error_pages;   // Error pages (404, 403, etc.)
-    std::vector<ServerLocation>    locations;    // List of location blocks
+    std::vector<int>               _ports;                   
+    std::string                    _root;
+    std::string                    _index;
+    std::map<int, std::string>     _error_pages;
+    std::vector<ServerLocation>    _locations;
     std::string                    _serverName;
     std::string                    _host;
-    int                            _hasListen;
-    int                            _hasRoot;
-    int                            _valid;
-    size_t                         clientMaxBodySize;
-    bool                           _insideLimitExcept;
+    size_t                         _clientMaxBodySize;
+    std::string rawBlock;
 public:
     // Default constructor
     ServerConfig();
+    void parseServerBlock(const std::string& serverBlock);
+    void parseLocationBlock(const std::string& locationBlock, ServerLocation& location);
+    void handleErrorPageDirective(const std::string& line);
+    void handleLocationDirective(const std::string& line, const std::string& serverBlock, size_t& pos);
+
+    void print() const;
+    void clear();
+
+
 
     // Getters and Setters
     void setPort(int serverPort);
@@ -54,18 +65,11 @@ public:
 	int	getValid() const;
     std::string toString() const;
 
-	ServerConfig* parseServerBlock(std::ifstream& filepath);
-    void parseLocationDirective(const std::string& token, const std::string& line, ServerLocation* currentLocation, bool& inLocationBlock);
-    bool parseServerDirective(const std::string& token, std::istringstream& iss, int& hasListen, int& hasRoot);
-    bool processServerOrLocation(const std::string& token, std::istringstream& iss, const std::string& line, ServerLocation*& currentLocation, bool& inLocationBlock);
-    bool parseErrorPageDirective(std::istringstream& iss);
-    bool parseRootDirective(std::istringstream& iss, int& hasRoot);
-    void parseIndexDirective(const std::string& line, ServerLocation* currentLocation);
 
-    std::string extractLocationPath(const std::string& line);
-    bool isValidIP(const std::string& ip) const;
-    void handleClientMaxBodySizeDirective(std::istringstream& iss, const std::string& line);
-    void display() const;
+    const std::vector<std::string>& getServerBlocks() const;
+    std::string trim(const std::string& str);
+
+	
 };
 
 #endif

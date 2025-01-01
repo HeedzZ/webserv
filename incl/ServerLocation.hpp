@@ -6,9 +6,9 @@
 
 class ServerLocation {
 private:
-    std::string path;
-    std::string root;
-    std::string index;
+    std::string _path;
+    std::string _root;
+    std::string _index;
     std::map<std::string, std::string> cgi_extensions;
     bool _getAllowed;
     bool _postAllowed;
@@ -20,6 +20,8 @@ public:
 
     // Getters and Setters
     const std::string& getPath() const;
+    void setPath(const std::string& Path);
+
     void setRoot(const std::string& rootPath);
     const std::string& getRoot() const;
     

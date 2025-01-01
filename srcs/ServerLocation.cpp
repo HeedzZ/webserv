@@ -3,32 +3,40 @@
 #include <sstream>
 #include <algorithm>
 
-ServerLocation::ServerLocation(const std::string& path) : path(path), _getAllowed(true), _postAllowed(true), _deleteAllowed(true)
-{}
+ServerLocation::ServerLocation(const std::string& path) : _path(path), _root(""), _index(""), _getAllowed(true), _postAllowed(true), _deleteAllowed(true)
+{
+    if (path.empty())
+        throw std::runtime_error("Error: Path cannot be empty in location block");
+}
 
 const std::string& ServerLocation::getPath() const
 {
-    return path;
+    return _path;
+}
+
+void ServerLocation::setPath(const std::string& Path)
+{
+    this->_path = Path;
 }
 
 void ServerLocation::setRoot(const std::string& rootPath)
 {
-    this->root = rootPath;
+    this->_root = rootPath;
 }
 
 const std::string& ServerLocation::getRoot() const
 {
-    return root;
+    return _root;
 }
 
 void ServerLocation::setIndex(const std::string& indexPage)
 {
-    this->index = indexPage;
+    this->_index = indexPage;
 }
 
 const std::string& ServerLocation::getIndex() const
 {
-    return index;
+    return _index;
 }
 
 void ServerLocation::addCgiExtension(const std::string& ext, const std::string& prog)
@@ -78,11 +86,11 @@ bool ServerLocation::isDeleteAllowed() const
     return _deleteAllowed;
 }
 
-/*void ServerLocation::setAllowedMethods(const std::string& methodsLine)
+void ServerLocation::setAllowedMethods(const std::string& methodsLine)
 {
-    allowGet = false;
-    allowPost = false;
-    allowDelete = false;
+    _getAllowed = false;
+    _postAllowed = false;
+    _deleteAllowed = false;
 
     std::istringstream iss(methodsLine);
     std::string method;
@@ -91,31 +99,32 @@ bool ServerLocation::isDeleteAllowed() const
     {
         std::transform(method.begin(), method.end(), method.begin(), ::toupper);
         if (method == "GET")
-            allowGet = true;
+            _getAllowed = true;
         else if (method == "POST")
-            allowPost = true;
+            _postAllowed = true;
         else if (method == "DELETE")
-            allowDelete = true;
+            _deleteAllowed = true;
     }
-}*/
+}
 
 void ServerLocation::display() const
 {
-    std::cout << "Location Path: " << path << std::endl;
+    std::cout << "----------location----------\n";
+    std::cout << "Location Path: " << _path << std::endl;
     std::cout << "CGI Extensions:\n";
     
     for (std::map<std::string, std::string>::const_iterator it = cgi_extensions.begin(); it != cgi_extensions.end(); ++it)
         std::cout << "  Extension: " << it->first << " -> Program: " << it->second << std::endl;
 
-    std::cout << "root : " << root << std::endl;
+    std::cout << "root : " << _root << std::endl;
 
-    std::cout << "index : " << index << std::endl;
+    std::cout << "index : " << _index << std::endl;
 
     std::cout << "Allowed Methods:\n";
     std::cout << "  GET: " << (_getAllowed ? "Yes" : "No") << std::endl;
     std::cout << "  POST: " << (_postAllowed ? "Yes" : "No") << std::endl;
     std::cout << "  DELETE: " << (_deleteAllowed ? "Yes" : "No") << std::endl;
 
-    std::cout << "-----------------------\n";
-    std::cout << "-----------------------\n";
+    std::cout << "-----------------------\n" << std::endl;
+    
 }

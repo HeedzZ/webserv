@@ -2,14 +2,14 @@
 #include "HttpRequest.hpp"
 #include "ServerConfig.hpp"
 
-Server::Server(const std::string& configFile) : running(false)
+Server::Server(const std::string configFile) : running(false)
 {
     logMessage("INFO", "Initializing the server...");
+    //printServerBlocks();
     try
     {
         if (!parseConfigFile(configFile))
             throw std::runtime_error("Failed to parse configuration file: " + configFile);
-        validateServerConfigurations();
         initSockets();
     }
     catch (const std::exception& e)
@@ -32,72 +32,89 @@ void Server::cleanup()
     cleanupSockets();
 }
 
-bool Server::parseConfigFile(const std::string& configFile)
+bool Server::parseConfigFile(std::string configFile)
+{
+    if (parseFileInBlock(configFile) == false)
+        return false;
+
+    for (std::vector<std::string>::iterator it = serverBlocks.begin(); it != serverBlocks.end(); ++it)
+    {
+        ServerConfig config;
+        try
+        {
+            config.parseServerBlock(*it);
+            //config.print();
+            _configs.push_back(config);
+        }
+        catch (const std::runtime_error& e)
+        {
+            std::cerr << "[ERROR] parsing server block failed : " << e.what() << std::endl;
+            config.clear();
+        }
+    }
+
+    return !_configs.empty();
+}
+
+bool Server::parseFileInBlock(std::string configFile)
 {
     std::ifstream file(configFile.c_str());
     if (!file.is_open())
     {
-        std::cerr << "Could not open the file: " << configFile << std::endl;
+        std::cerr << "Error: Unable to open config file: " << configFile << std::endl;
         return false;
     }
-        while (file.peek() != EOF)
-        {
-            try
-            {
-                std::auto_ptr<ServerConfig> currentConfig(new ServerConfig());
-                if (currentConfig->parseServerBlock(file))
-                    _configs.push_back(*currentConfig);
-            }
-            catch (const std::runtime_error& e)
-            {
-                std::cerr << "Configuration error: " << e.what() << std::endl;
-            }
-            catch (...)
-            {
-                std::cerr << "Unexpected error while parsing configuration." << std::endl;
-            }
-        }
-    return !_configs.empty();
-}
 
-void Server::validateServerConfigurations()
-{
-    for (size_t i = 0; i < _configs.size(); ++i)
+    std::string line;
+    std::string currentBlock;
+    bool inServerBlock = false;
+    int braceCount = 0;
+
+    while (std::getline(file, line))
     {
-        const std::string& host1 = _configs[i].getHost();
-        const std::vector<int>& ports1 = _configs[i].getPorts();
-        const std::string& serverName1 = _configs[i].getServerName();
+        std::string trimmedLine = line;
+        trimmedLine.erase(0, trimmedLine.find_first_not_of(" \t"));
+        trimmedLine.erase(trimmedLine.find_last_not_of(" \t") + 1);
 
-        for (size_t j = i + 1; j < _configs.size(); ++j)
+        if (trimmedLine.empty() || trimmedLine[0] == '#')
+            continue;
+
+        if (trimmedLine.find("server {") == 0)
         {
-            const std::string& host2 = _configs[j].getHost();
-            const std::vector<int>& ports2 = _configs[j].getPorts();
-            const std::string& serverName2 = _configs[j].getServerName();
+            inServerBlock = true;
+            braceCount = 1;
+            currentBlock = "server {\n";
+            continue;
+        }
 
-            for (size_t p1 = 0; p1 < ports1.size(); ++p1)
+        if (inServerBlock)
+        {
+            currentBlock += line + "\n";
+            for (size_t i = 0; i < line.length(); ++i)
             {
-                for (size_t p2 = 0; p2 < ports2.size(); ++p2)
-                {
-                    if (ports1[p1] == ports2[p2] && host1 == host2)
-                    {
-                        if (serverName1.empty() && serverName2.empty())
-                        {
-                            throw std::runtime_error(
-                                "Configuration error: Multiple servers on the same host (" +
-                                host1 + ") and port (" + intToString(ports1[p1]) +
-                                ") without server_name.");
-                        }
-                        if (!serverName1.empty() && !serverName2.empty() && serverName1 == serverName2)
-                        {
-                            throw std::runtime_error(
-                                "Configuration error: Duplicate server_name (" + serverName1 +
-                                ") on the same host (" + host1 + ") and port (" + intToString(ports1[p1]) + ").");
-                        }
-                    }
-                }
+                if (line[i] == '{') ++braceCount;
+                if (line[i] == '}') --braceCount;
+            }
+            if (braceCount == 0)
+            {
+                inServerBlock = false;
+                serverBlocks.push_back(currentBlock);
+                currentBlock.clear();
+            }
+            else if (braceCount < 0)
+            {
+                std::cerr << "Error: Mismatched braces in configuration file." << std::endl;
+                return false;
             }
         }
     }
+
+    if (inServerBlock)
+    {
+        std::cerr << "Error: Unclosed server block at end of file." << std::endl;
+        return false;
+    }
+    return true;
 }
 
 void Server::logMessage(const std::string& level, const std::string& message) const
@@ -155,20 +172,17 @@ std::string Server::intToString(int value)
     return oss.str();
 }
 
-void Server::displayConfigs(const std::vector<ServerConfig>& configs)
+void Server::printServerBlocks() const
 {
-    std::cout << "==== Displaying Server Configurations ====" << std::endl;
-
-    if (configs.empty())
+    if (serverBlocks.empty())
     {
-        std::cout << "No configurations found." << std::endl;
+        std::cout << "No server blocks available." << std::endl;
         return;
     }
 
-    for (size_t i = 0; i < configs.size(); ++i)
-    {
-        std::cout << "Configuration #" << i + 1 << ":" << std::endl;
-        std::cout << configs[i].toString() << std::endl;
-        std::cout << "-----------------------------------------" << std::endl;
+    for (size_t i = 0; i < serverBlocks.size(); ++i) {
+        std::cout << "Server Block " << i + 1 << ":\n";
+        std::cout << serverBlocks[i] << std::endl;
+        std::cout << "-----------------------------------" << std::endl;
     }
 }
