@@ -132,7 +132,6 @@ void ServerConfig::handleLocationDirective(const std::string& line, const std::s
 
     if (path.empty())
         throw std::runtime_error("Error: Missing 'path' for location block");
-
     size_t locationStart = serverBlock.find('{', pos);
     size_t locationEnd = serverBlock.find('}', locationStart);
 
@@ -200,18 +199,15 @@ void ServerConfig::parseLocationBlock(const std::string& locationBlock, ServerLo
 
         std::string line = locationBlock.substr(pos, end - pos);
 
-        // Supprimer les espaces ou tabulations autour de la ligne
-        line.erase(0, line.find_first_not_of(" \t"));
-        line.erase(line.find_last_not_of(" \t") + 1);
+        line.erase(0, line.find_first_not_of(" \t\r"));
+        line.erase(line.find_last_not_of(" \t\r;") + 1);
 
-        // Ignorer les lignes vides ou contenant uniquement des espaces/tabulations
         if (line.empty() || line[0] == '#')
         {
             pos = end + 1;
             continue;
         }
 
-        // Traiter les directives connues
         if (line.find("root") == 0)
         {
             std::string value = line.substr(4);
@@ -229,6 +225,7 @@ void ServerConfig::parseLocationBlock(const std::string& locationBlock, ServerLo
             location.disableAllMethods();
             std::string methods = line.substr(7);
             methods.erase(0, methods.find_first_not_of(" \t"));
+
             if (methods.find("GET") != std::string::npos)
                 location.allowGet();
             if (methods.find("POST") != std::string::npos)
@@ -238,18 +235,21 @@ void ServerConfig::parseLocationBlock(const std::string& locationBlock, ServerLo
         }
         else
         {
-            throw std::runtime_error("Error: Unknown directive in location block: ' " + line + "'");
+            if (line.find_first_not_of(" \t") == std::string::npos)
+            {
+                pos = end + 1;
+                continue;
+            }
+            std::cerr << "Unknown directive: [" << line << "]" << std::endl;
+
+            throw std::runtime_error("Error: Unknown directive in location block: '" + line + "'");
         }
 
         pos = end + 1;
     }
-
-    // Validation finale : Vérification des directives essentielles
-    if (location.getRoot().empty())
-        throw std::runtime_error("Error: Missing 'root' directive in location block");
-    if (location.getIndex().empty())
-        throw std::runtime_error("Error: Missing 'index' directive in location block");
 }
+
+
 
 
 void ServerConfig::clear()
