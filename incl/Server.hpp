@@ -33,34 +33,13 @@
 #include "ServerConfig.hpp"
 
 class Server {
-public:
-    // Constructeur et destructeur
-    Server(const std::string configFile);
-    ~Server();
-
-    // Méthodes principales
-    void initSockets();
-    void run();                      
-    void stop();
-    bool isRunning() const;
-    void setRunning(bool status);
-
-    // Gestion des signaux
-    static void signalHandler(int signal);
-
-    std::string intToString(int value);
-    void logMessage(const std::string& level, const std::string& message) const;
-    std::string logMessageError(const std::string& level, const std::string& message) const;
-
-    ServerConfig* getConfigForSocket(int socket);
-    ServerConfig* getConfigForRequest(const std::string& hostHeader, int connectedPort);
-
 private:
+    // Parsing
     bool parseConfigFile(std::string configFile);
     void printServerBlocks() const;
     bool parseFileInBlock(std::string configFile);
 
-    // Helpers pour les sockets
+    // Sockets
     int createSocket();
     void configureSocket(int server_fd);
     void bindSocket(int server_fd, int port);
@@ -68,8 +47,9 @@ private:
     void addServerSocketToPoll(int server_fd);
     void cleanupSockets();
     void cleanup();
+    bool isServerSocket(int fd) const;
 
-    // Gestion des connexions
+    // Handle connections
     void handleNewConnection(int server_fd);
     void handleClientRequest(int clientIndex);
     void logResponseDetails(const std::string& response, const std::string& path);
@@ -77,33 +57,41 @@ private:
     void unchunk();
     std::string chunkedToBody(int client_fd, int clientIndex, std::string buffer, size_t transferEncodingPos);
     void removeClient(int index);
-
-    // Utilitaires HTTP
-    std::string generateHttpResponse(const std::string& requestedPath);
-    std::string extractRequestedPath(const std::string& buffer);
-
-    // Vérification des sockets
-    bool isServerSocket(int fd) const;
-
     void validateServerConfigurations();
     void displayConfigs(const std::vector<ServerConfig>& configs);
     
-    // Variables membres
+    // Variables
     bool running;
-    std::vector<int> _server_fds;      // Liste des sockets serveurs
-    std::vector<int> _ports;           // Liste des ports en écoute
-    std::vector<sockaddr_in> _addresses; // Adresses des sockets
-    std::vector<pollfd> _poll_fds;     // Liste des descripteurs pour poll
-
+    std::vector<int> _server_fds;
+    std::vector<int> _ports;
+    std::vector<sockaddr_in> _addresses;
+    std::vector<pollfd> _poll_fds;
     std::vector<std::string> serverBlocks;
     std::vector<ServerConfig> _configs;
-
     std::map<int, ServerConfig*> _socketToConfig;
     std::map<int, std::string> responseBuffer;
     std::map<int, std::string> clientBuffers;
-
-    // Variable statique pour gérer les signaux
     static volatile sig_atomic_t signal_received;
+public:
+    Server(const std::string configFile);
+    ~Server();
+
+    // Main fonctions
+    void initSockets();
+    void run();                      
+    void stop();
+    bool isRunning() const;
+    void setRunning(bool status);
+
+    static void signalHandler(int signal);
+
+    // Utils and logMessages
+    std::string intToString(int value);
+    void logMessage(const std::string& level, const std::string& message) const;
+    std::string logMessageError(const std::string& level, const std::string& message) const;
+
+    ServerConfig* getConfigForSocket(int socket);
+    ServerConfig* getConfigForRequest(const std::string& hostHeader, int connectedPort);
 };
 
 #endif // SERVER_HPP
