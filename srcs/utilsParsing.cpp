@@ -58,7 +58,6 @@ std::string ServerConfig::getErrorPage(int errorCode) const
 void ServerConfig::addLocation(const ServerLocation& location)
 {
     _locations.push_back(location);
-    //_location.display();
 }
 
 const std::vector<ServerLocation>& ServerConfig::getLocations() const

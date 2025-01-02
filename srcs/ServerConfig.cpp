@@ -2,7 +2,15 @@
 
 ServerConfig::ServerConfig() : _root("var/www/main"), _index("index.html"), _host("127.0.0.1"), _clientMaxBodySize(100000000)
 {
-
+    setErrorPage(404, ("main/errors/404.html"));
+    setErrorPage(500, ("main/errors/500.html"));
+    setErrorPage(504, ("main/errors/504.html"));
+    setErrorPage(411, ("main/errors/411.html"));
+    setErrorPage(400, ("main/errors/400.html"));
+    setErrorPage(403, ("main/errors/403.html"));
+    setErrorPage(405, ("main/errors/405.html"));
+    setErrorPage(413, ("main/errors/413.html"));
+    setErrorPage(415, ("main/errors/415.html"));
 }
 
 void ServerConfig::parseServerBlock(const std::string& serverBlock)
