@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <unistd.h>
 
 class ServerConfig {
 private:

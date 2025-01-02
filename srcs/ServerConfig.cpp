@@ -179,9 +179,13 @@ void ServerConfig::handleErrorPageDirective(const std::string& line)
     std::string errorPath = value.substr(spacePos + 1);
     errorPath.erase(0, errorPath.find_first_not_of(" \t"));
     errorPath.erase(errorPath.find_last_not_of(" \t;") + 1);
-
     if (errorPath.empty())
         throw std::runtime_error("Error: Missing path for 'error_page'");
+    std::string fullPath = _root + errorPath;
+    std::ifstream testFile(fullPath.c_str());
+    if (!testFile.is_open())
+        throw std::runtime_error("Error page file does not exist: " + fullPath);
+    testFile.close();
 
     _error_pages[errorCode] = errorPath;
 }
@@ -213,12 +217,20 @@ void ServerConfig::parseLocationBlock(const std::string& locationBlock, ServerLo
             std::string value = line.substr(4);
             value.erase(0, value.find_first_not_of(" \t"));
             location.setRoot(value);
+
+            std::ifstream testFile(value.c_str());
+            if (!testFile.is_open())
+            throw std::runtime_error("The specified root directory does not exist: " + value);
         }
         else if (line.find("index") == 0)
         {
             std::string value = line.substr(5);
             value.erase(0, value.find_first_not_of(" \t"));
             location.setIndex(value);
+            std::string fullPath = location.getRoot() + value;
+            std::ifstream testFile(fullPath.c_str());
+            if (!testFile.is_open())
+                throw std::runtime_error("The specified index file does not exist " + fullPath);
         }
         else if (line.find("methods") == 0)
         {
@@ -248,9 +260,6 @@ void ServerConfig::parseLocationBlock(const std::string& locationBlock, ServerLo
         pos = end + 1;
     }
 }
-
-
-
 
 void ServerConfig::clear()
 {
