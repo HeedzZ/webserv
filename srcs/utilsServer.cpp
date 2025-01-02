@@ -5,7 +5,6 @@
 Server::Server(const std::string configFile) : running(false)
 {
     logMessage("INFO", "Initializing the server...");
-    //printServerBlocks();
     try
     {
         if (!parseConfigFile(configFile))
@@ -44,7 +43,6 @@ bool Server::parseConfigFile(std::string configFile)
         try
         {
             config.parseServerBlock(*it);
-            //config.print();
             _configs.push_back(config);
         }
         catch (const std::runtime_error& e)

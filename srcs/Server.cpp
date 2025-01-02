@@ -27,6 +27,8 @@ int Server::createSocket()
 
 void Server::initSockets()
 {
+    std::vector<std::pair<std::string, int> > boundSockets;
+
     for (size_t i = 0; i < _configs.size(); ++i)
     {
         const std::vector<int>& ports = _configs[i].getPorts();
@@ -34,21 +36,13 @@ void Server::initSockets()
 
         for (size_t j = 0; j < ports.size(); ++j)
         {
-            bool configExists = false;
+            std::pair<std::string, int> socketKey = std::make_pair(host, ports[j]);
 
-            for (std::map<int, ServerConfig*>::iterator it = _socketToConfig.begin(); it != _socketToConfig.end(); ++it) {
-                ServerConfig* existingConfig = it->second;
-
-                if (existingConfig->getServerName().empty() && 
-                    existingConfig->getHost() == host && 
-                    std::find(existingConfig->getPorts().begin(), existingConfig->getPorts().end(), ports[j]) != existingConfig->getPorts().end())
-                {
-                    configExists = true;
-                    break;
-                }
-            }
-            if (configExists)
+            if (std::find(boundSockets.begin(), boundSockets.end(), socketKey) != boundSockets.end()) {
+                logMessage("INFO", "Socket already bound for " + host + ":" + intToString(ports[j]));
                 continue;
+            }
+
             int server_fd = createSocket();
             try {
                 configureSocket(server_fd);
@@ -62,9 +56,10 @@ void Server::initSockets()
                 {
                     close(server_fd);
                     _server_fds.erase(std::remove(_server_fds.begin(), _server_fds.end(), server_fd), _server_fds.end());
-                    throw std::runtime_error("Failed to bind socket for host: " + host);
+                    throw std::runtime_error("Failed to bind socket for host: " + host + " on port " + intToString(ports[j]));
                 }
 
+                boundSockets.push_back(socketKey);
                 _addresses.push_back(address);
                 listenOnSocket(server_fd);
                 _socketToConfig[server_fd] = &_configs[i];
@@ -80,6 +75,7 @@ void Server::initSockets()
         }
     }
 }
+
 
 void Server::configureSocket(int server_fd)
 {
