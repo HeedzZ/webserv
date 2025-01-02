@@ -349,98 +349,17 @@ std::string Server::readClientRequest(int client_fd, int clientIndex)
         }
     }
     else if (bytes_read == 0)
-    {
-        // Client a fermé la connexion
-        logMessage("INFO", "Client closed the connection.");
         removeClient(clientIndex);
-    }
-    else if (bytes_read == -1 && (errno != EAGAIN && errno != EWOULDBLOCK))
+    else if (bytes_read == -1)
     {
         // Erreur critique de lecture
-        logMessage("ERROR", "Read error on client socket: " + std::string(strerror(errno)));
+        logMessage("ERROR", "Read error on client socket." + intToString(client_fd));
         removeClient(clientIndex);
     }
 
     // Retourne une chaîne vide si la requête est incomplète
     return "";
 }
-
-
-
-std::string Server::chunkedToBody(int client_fd, int clientIndex, std::string buffer, size_t transferEncodingPos)
-{
-    char tempBuffer[1024];
-    ssize_t bytes_read;
-    std::string body;
-    size_t bodyStart = buffer.find("\r\n\r\n") + 4;
-    size_t currentPos = bodyStart;
-
-    while (true) {
-        // Lire plus de données si nécessaire pour atteindre la taille du chunk
-        size_t nextChunkPos = buffer.find("\r\n", currentPos);
-        while (nextChunkPos == std::string::npos) {
-            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-            if (bytes_read <= 0) {
-                logMessage("WARNING", "Connection lost while reading chunks");
-                removeClient(clientIndex);
-                return "";
-            }
-            tempBuffer[bytes_read] = '\0';
-            buffer += std::string(tempBuffer, bytes_read);
-            nextChunkPos = buffer.find("\r\n", currentPos);
-        }
-
-        // Extraire la taille du chunk en hexadécimal
-        std::string chunkSizeHex = buffer.substr(currentPos, nextChunkPos - currentPos);
-        size_t chunkSize;
-        std::istringstream(chunkSizeHex) >> std::hex >> chunkSize;
-
-        // Si la taille est nulle, la lecture est terminée
-        if (chunkSize == 0) {
-            // Avancer au-delà du chunk final et CRLF
-            currentPos = nextChunkPos + 2;
-            if (buffer.substr(currentPos, 2) != "\r\n") {
-                logMessage("ERROR", "Final chunk not properly terminated. Adding \\r\\n.");
-                buffer.insert(currentPos, "\r\n");
-            }
-            break;
-        }
-
-        // Calcul de la position de début et de fin des données du chunk
-        size_t chunkDataStart = nextChunkPos + 2;
-        size_t chunkDataEnd = chunkDataStart + chunkSize;
-
-        // Lire les données si elles ne sont pas encore toutes reçues
-        while (buffer.size() < chunkDataEnd + 2) {
-            bytes_read = read(client_fd, tempBuffer, sizeof(tempBuffer) - 1);
-            if (bytes_read <= 0) {
-                logMessage("WARNING", "Connection lost while reading chunk data");
-                removeClient(clientIndex);
-                return "";
-            }
-            tempBuffer[bytes_read] = '\0';
-            buffer += std::string(tempBuffer, bytes_read);
-        }
-
-        // Extraire le chunk et l'ajouter au corps final
-        body += buffer.substr(chunkDataStart, chunkSize);
-
-        // Avancer la position pour le prochain chunk (sauter CRLF après les données)
-        currentPos = chunkDataEnd + 2;
-    }
-
-    // Reconstruction de la requête finale (remplacer Transfer-Encoding par Content-Length)
-    std::string finalRequest = buffer.substr(0, transferEncodingPos);
-    finalRequest += "Content-Length: " + intToString(body.length()) + "\r\n";
-    finalRequest += buffer.substr(buffer.find("\r\n", transferEncodingPos) + 2, bodyStart - (transferEncodingPos + 26));
-    finalRequest += body;
-
-    //std::cout << "Final Request:\n" << finalRequest << std::endl;
-    return finalRequest;
-}
-
-
-
 
 void Server::removeClient(int index)
 {
@@ -459,7 +378,6 @@ void Server::removeClient(int index)
     }
 
     _poll_fds.erase(_poll_fds.begin() + index);
-    logMessage("INFO", "Client " + intToString(client_fd) + " disconnected and cleaned up.");
 }
 
 void Server::stop()

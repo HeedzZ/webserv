@@ -102,7 +102,10 @@ std::string HttpRequest::handleGet(ServerConfig& config)
 
     // Si c'est un script Python CGI, exécuter le CGI
     if (fullPath.find(".py") != std::string::npos && fullPath.find("/var/www/upload/") == std::string::npos)
+    {
+        std::cout << fullPath << std::cout;
         return executeCGI(fullPath, config);
+    }
 
     // Lire le fichier (contenu)
     std::string fileContent = readFile(fullPath);

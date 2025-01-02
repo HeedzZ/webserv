@@ -10,6 +10,7 @@ Server::Server(const std::string configFile) : running(false)
     {
         if (!parseConfigFile(configFile))
             throw std::runtime_error("Failed to parse configuration file: " + configFile);
+        validateServerConfigurations();
         initSockets();
     }
     catch (const std::exception& e)
@@ -55,6 +56,52 @@ bool Server::parseConfigFile(std::string configFile)
 
     return !_configs.empty();
 }
+
+void Server::validateServerConfigurations()
+{
+    for (size_t i = 0; i < _configs.size(); ++i)
+    {
+        const std::string& host1 = _configs[i].getHost();
+        const std::vector<int>& ports1 = _configs[i].getPorts();
+        const std::string& serverName1 = _configs[i].getServerName();
+
+        for (size_t j = i + 1; j < _configs.size(); ++j)
+        {
+            const std::string& host2 = _configs[j].getHost();
+            const std::vector<int>& ports2 = _configs[j].getPorts();
+            const std::string& serverName2 = _configs[j].getServerName();
+
+            for (size_t p1 = 0; p1 < ports1.size(); ++p1)
+            {
+                for (size_t p2 = 0; p2 < ports2.size(); ++p2)
+                {
+                    if (ports1[p1] == ports2[p2] && host1 == host2)
+                    {
+                        if (serverName1.empty() && serverName2.empty())
+                        {
+                            std::cout <<
+                                "Multiple servers on the same host (" <<
+                                host1 << ") and port (" << intToString(ports1[p1]) <<
+                                ") without server_name." << std::endl;
+                            _configs.erase(_configs.begin() + j);
+                            _configs.erase(_configs.begin() + i);
+                        }
+                        if (!serverName1.empty() && !serverName2.empty() && serverName1 == serverName2)
+                        {
+                            std::cout <<
+                                "Duplicate server_name (" << serverName1 <<
+                                ") on the same host (" << host1 << ") and port (" << intToString(ports1[p1]) << ")." << std::endl;
+                            _configs.erase(_configs.begin() + j);
+                            _configs.erase(_configs.begin() + i);
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 bool Server::parseFileInBlock(std::string configFile)
 {
