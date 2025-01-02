@@ -14,8 +14,6 @@
 #include "HttpRequest.hpp"
 #include "ServerConfig.hpp"
 
-
-// Initialize static variable
 volatile sig_atomic_t Server::signal_received = 0;
 
 int Server::createSocket()
@@ -27,15 +25,15 @@ int Server::createSocket()
     return server_fd;
 }
 
-
 void Server::initSockets()
 {
-    for (size_t i = 0; i < _configs.size(); ++i) {
+    for (size_t i = 0; i < _configs.size(); ++i)
+    {
         const std::vector<int>& ports = _configs[i].getPorts();
         const std::string& host = _configs[i].getHost();
-        //const std::string& serverName = _configs[i].getServerName();
 
-        for (size_t j = 0; j < ports.size(); ++j) {
+        for (size_t j = 0; j < ports.size(); ++j)
+        {
             bool configExists = false;
 
             for (std::map<int, ServerConfig*>::iterator it = _socketToConfig.begin(); it != _socketToConfig.end(); ++it) {
@@ -43,13 +41,12 @@ void Server::initSockets()
 
                 if (existingConfig->getServerName().empty() && 
                     existingConfig->getHost() == host && 
-                    std::find(existingConfig->getPorts().begin(), existingConfig->getPorts().end(), ports[j]) != existingConfig->getPorts().end()) {
+                    std::find(existingConfig->getPorts().begin(), existingConfig->getPorts().end(), ports[j]) != existingConfig->getPorts().end())
+                {
                     configExists = true;
-                    //logMessage("INFO", "Configuration already exists for " + host + ":" + intToString(ports[j]));
                     break;
                 }
             }
-
             if (configExists)
                 continue;
             int server_fd = createSocket();
@@ -61,7 +58,8 @@ void Server::initSockets()
                 address.sin_addr.s_addr = inet_addr(host.c_str());
                 address.sin_port = htons(ports[j]);
 
-                if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
+                if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0)
+                {
                     close(server_fd);
                     _server_fds.erase(std::remove(_server_fds.begin(), _server_fds.end(), server_fd), _server_fds.end());
                     throw std::runtime_error("Failed to bind socket for host: " + host);
@@ -111,60 +109,41 @@ void Server::addServerSocketToPoll(int server_fd)
     _server_fds.push_back(server_fd);
 }
 
-ServerConfig* Server::getConfigForSocket(int socket)
-{
-    if (_socketToConfig.find(socket) != _socketToConfig.end())
-        return _socketToConfig[socket];
-    return NULL;
-}
-
 ServerConfig* Server::getConfigForRequest(const std::string& hostHeader, int connectedPort)
 {
     if (hostHeader.empty())
-        return &_configs[0];  // Par défaut, retourner la première config si pas d'host fourni.
-
+        return &_configs[0];
     std::string hostWithoutPort = hostHeader;
     int portFromHeader = connectedPort;
     size_t colonPos = hostHeader.find(':');
-    if (colonPos != std::string::npos) {
+    if (colonPos != std::string::npos)
+    {
         hostWithoutPort = hostHeader.substr(0, colonPos);
         std::istringstream ss(hostHeader.substr(colonPos + 1));
         ss >> portFromHeader;
     }
-
     ServerConfig* defaultForPort = NULL;
-
-    for (size_t i = 0; i < _configs.size(); ++i) {
+    for (size_t i = 0; i < _configs.size(); ++i)
+    {
         const std::string& configHost = _configs[i].getHost();
         const std::string& configServerName = _configs[i].getServerName();
         const std::vector<int>& configPorts = _configs[i].getPorts();
-
-        // Correspondance exacte sur server_name et port
         if (!configServerName.empty()) {
             if (hostWithoutPort == configServerName) {
                 if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end())
                     return &_configs[i];
             }
         }
-
-        // Correspondance exacte sur host et port
         if (hostWithoutPort == configHost) {
             if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end())
                 return &_configs[i];
         }
-
-        // Enregistrer une config de fallback pour ce port
-        if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end() && !defaultForPort) {
+        if (std::find(configPorts.begin(), configPorts.end(), portFromHeader) != configPorts.end() && !defaultForPort)
             defaultForPort = &_configs[i];
-        }
     }
-
-    // Retourner le premier serveur qui écoute sur ce port
     if (defaultForPort)
         return defaultForPort;
-
-    // Si aucun serveur n'écoute sur ce port, retourner NULL (ou gérer une 404)
-    return NULL;  // Optionnel : retourner une erreur si aucun serveur ne correspond.
+    return NULL;
 }
 
 
@@ -223,7 +202,7 @@ void Server::run()
                     else
                     {
                         responseBuffer.erase(client_fd);
-                        _poll_fds[i].events &= ~POLLOUT;  // Désactiver l'écriture
+                        _poll_fds[i].events &= ~POLLOUT;
                     }
                 }
             }
@@ -267,35 +246,28 @@ void Server::handleNewConnection(int server_fd)
 void Server::handleClientRequest(int clientIndex)
 {
     int client_fd = _poll_fds[clientIndex].fd;
-
     std::string buffer = readClientRequest(client_fd, clientIndex);
-
-    // Si la requête est vide (incomplète), on attend plus de données
-    if (buffer.empty()) return;
-
-    // Si la requête est complète, on la traite
+    if (buffer.empty())
+        return;
     HttpRequest request(buffer);
     std::string hostHeader = request.getHeaderValue("Host");
-
     int connectedPort = -1;
     struct sockaddr_in addr;
     socklen_t addrLen = sizeof(addr);
-    if (getsockname(client_fd, (struct sockaddr*)&addr, &addrLen) == 0) {
+    if (getsockname(client_fd, (struct sockaddr*)&addr, &addrLen) == 0)
         connectedPort = ntohs(addr.sin_port);
-    }
-
     ServerConfig* config = getConfigForRequest(hostHeader, connectedPort);
-    if (!config) {
+    if (!config)
+    {
         logMessage("ERROR", "No configuration found for client " + intToString(client_fd));
         removeClient(clientIndex);
         return;
     }
-
     try {
         std::string response = request.handleRequest(*config);
          logMessage("INFO", request.getMethod() + " " + request.getPath() + " " + request.getHttpVersion() + + "\" " + intToString(request.extractStatusCode(response)) + " " + intToString(response.size()) + " \"" + request.getHeaderValue("User-Agent") + "\"");
         responseBuffer[client_fd] = response;
-        _poll_fds[clientIndex].events |= POLLOUT;  // Marquer pour écriture
+        _poll_fds[clientIndex].events |= POLLOUT;
     }
     catch (const std::exception& e) {
         logMessage("ERROR", "Failed to handle request for client " + intToString(client_fd));
@@ -303,45 +275,36 @@ void Server::handleClientRequest(int clientIndex)
     }
 }
 
-
 std::string Server::readClientRequest(int client_fd, int clientIndex)
 {
     char tempBuffer[1024];
     ssize_t bytes_read;
 
-    // Lecture non bloquante (MSG_DONTWAIT)
     bytes_read = recv(client_fd, tempBuffer, sizeof(tempBuffer) - 1, MSG_DONTWAIT);
 
     if (bytes_read > 0)
     {
         tempBuffer[bytes_read] = '\0';
-        clientBuffers[client_fd] += std::string(tempBuffer, bytes_read);  // Accumule la requête
+        clientBuffers[client_fd] += std::string(tempBuffer, bytes_read);
 
-        // Vérifie si les headers sont complets (fin par \r\n\r\n)
         if (clientBuffers[client_fd].find("\r\n\r\n") != std::string::npos || clientBuffers[client_fd].find("\n\n") != std::string::npos)
         {
             size_t contentLengthPos = clientBuffers[client_fd].find("Content-Length:");
             
             if (contentLengthPos != std::string::npos) {
-                // Lire la longueur du corps
                 size_t start = clientBuffers[client_fd].find(" ", contentLengthPos) + 1;
                 size_t end = clientBuffers[client_fd].find("\r\n", contentLengthPos);
                 int contentLength = std::atoi(clientBuffers[client_fd].substr(start, end - start).c_str());
-
-                // Calculer la taille actuelle du corps
                 size_t currentBodySize = clientBuffers[client_fd].size() - clientBuffers[client_fd].find("\r\n\r\n") - 4;
-
-                // Si le corps est complet, retourner la requête complète
                 if (currentBodySize >= static_cast<size_t>(contentLength))
                 {
                     std::string completeRequest = clientBuffers[client_fd];
-                    clientBuffers.erase(client_fd);  // Nettoyage après traitement complet
+                    clientBuffers.erase(client_fd);
                     return completeRequest;
                 }
             }
             else
             {
-                // Requête sans corps (GET)
                 std::string completeRequest = clientBuffers[client_fd];
                 clientBuffers.erase(client_fd);
                 return completeRequest;
@@ -352,12 +315,9 @@ std::string Server::readClientRequest(int client_fd, int clientIndex)
         removeClient(clientIndex);
     else if (bytes_read == -1)
     {
-        // Erreur critique de lecture
         logMessage("ERROR", "Read error on client socket." + intToString(client_fd));
         removeClient(clientIndex);
     }
-
-    // Retourne une chaîne vide si la requête est incomplète
     return "";
 }
 
@@ -365,18 +325,12 @@ void Server::removeClient(int index)
 {
     int client_fd = _poll_fds[index].fd;
 
-    if (responseBuffer.find(client_fd) != responseBuffer.end()) {
+    if (responseBuffer.find(client_fd) != responseBuffer.end())
         responseBuffer.erase(client_fd);
-    }
-
-    if (_socketToConfig.find(client_fd) != _socketToConfig.end()) {
+    if (_socketToConfig.find(client_fd) != _socketToConfig.end())
         _socketToConfig.erase(client_fd);
-    }
-
-    if (client_fd != -1) {
+    if (client_fd != -1)
         close(client_fd);
-    }
-
     _poll_fds.erase(_poll_fds.begin() + index);
 }
 

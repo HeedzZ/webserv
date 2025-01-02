@@ -82,35 +82,24 @@ std::string HttpRequest::handleGet(ServerConfig& config)
 {
     std::string fullPath = resolveFilePath(config);
     
-    // Vérifie si le chemin est valide (fichier ou dossier)
     struct stat fileStat;
     if (stat(fullPath.c_str(), &fileStat) != 0)
-        return findErrorPage(config, 404);  // Fichier non trouvé (404)
-
-    // Si c'est un répertoire, tenter de charger index.html
+        return findErrorPage(config, 404);
     if (S_ISDIR(fileStat.st_mode))
     {
         std::string indexPath = fullPath + "/index.html";
         if (access(indexPath.c_str(), F_OK) != 0)
-            return findErrorPage(config, 403);  // Aucun index.html -> 403 Forbidden
+            return findErrorPage(config, 403);
         fullPath = indexPath;
     }
-
-    // Vérifie que le fichier est accessible
     if (!isFileAccessible(fullPath))
-        return findErrorPage(config, 404);  // Fichier inaccessible (404)
-
-    // Si c'est un script Python CGI, exécuter le CGI
+        return findErrorPage(config, 404);
     if (fullPath.find(".py") != std::string::npos && fullPath.find("/var/www/upload/") == std::string::npos)
     {
         std::cout << fullPath << std::cout;
         return executeCGI(fullPath, config);
     }
-
-    // Lire le fichier (contenu)
     std::string fileContent = readFile(fullPath);
-
-    // Si le fichier est vide (mais existant), retourner 200 OK avec un corps vide
     if (fileContent.empty() && S_ISREG(fileStat.st_mode))
     {
         std::string response = "HTTP/1.1 204 No Content\r\n";
@@ -118,19 +107,13 @@ std::string HttpRequest::handleGet(ServerConfig& config)
         response += "Connection: close\r\n\r\n";
         return response;
     }
-
-    // Si la lecture a échoué pour d'autres raisons
     if (fileContent.empty())
-        return findErrorPage(config, 500);  // Erreur interne (500)
-
-    // Construire la réponse HTTP pour les fichiers normaux
+        return findErrorPage(config, 500);
     std::ostringstream oss;
     oss << fileContent.size();
-
     std::string response = "HTTP/1.1 200 OK\r\n";
     response += "Content-Length: " + oss.str() + "\r\n";
     response += "Content-Type: " + getMimeType(fullPath) + "\r\n";
-
     if (_headers["Connection"] == "keep-alive")
         response += "Connection: keep-alive\r\n";
     else
@@ -145,13 +128,11 @@ void HttpRequest::setupChildProcess(int outputPipe[2], int inputPipe[2], const s
 {
     close(outputPipe[0]);
     if (dup2(outputPipe[1], STDOUT_FILENO) == -1)
-
-{
+    {
         perror("Erreur de redirection de la sortie standard");
         exit(1);
     }
     close(outputPipe[1]);
-
     close(inputPipe[1]);
     if (dup2(inputPipe[0], STDIN_FILENO) == -1)
     {
@@ -159,15 +140,11 @@ void HttpRequest::setupChildProcess(int outputPipe[2], int inputPipe[2], const s
         exit(1);
     }
     close(inputPipe[0]);
-
     std::vector<char*> env = setupCGIEnvironment(scriptPath);
-
     char* args[] = {(char*)"/usr/bin/python3", (char*)scriptPath.c_str(), NULL};
     execve("/usr/bin/python3", args, env.data());
     for (size_t i = 0; i < env.size(); ++i)
         free(env[i]);
-
-
     perror("Erreur d'exécution du script CGI");
     exit(1);
 }
@@ -176,7 +153,6 @@ std::string HttpRequest::handleParentProcess(int outputPipe[2], int inputPipe[2]
 {
     close(outputPipe[1]);
     close(inputPipe[0]);
-
     ssize_t bytesWritten = write(inputPipe[1], _body.c_str(), _body.size());
     close(inputPipe[1]);
     if (bytesWritten == -1)
@@ -191,7 +167,6 @@ std::string HttpRequest::handleParentProcess(int outputPipe[2], int inputPipe[2]
         output += buffer;
     }
     close(outputPipe[0]);
-
     int status;
     if (waitpid(pid, &status, 0) == -1)
         throw std::runtime_error("Erreur lors de l'attente du processus CGI");
@@ -203,23 +178,21 @@ std::string HttpRequest::handleParentProcess(int outputPipe[2], int inputPipe[2]
 std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig& config)
 {
     (void)config;
-
     try
     {
         int outputPipe[2], inputPipe[2];
         createPipes(outputPipe, inputPipe);
 
         pid_t pid = fork();
-        if (pid == 0)  // Processus enfant (CGI)
+        if (pid == 0)
         {
             setupChildProcess(outputPipe, inputPipe, scriptPath);
         }
-        else if (pid > 0)  // Processus parent (serveur)
+        else if (pid > 0)
         {
             close(outputPipe[1]);
             close(inputPipe[0]);
 
-            // Envoyer le corps de la requête (si POST)
             write(inputPipe[1], _body.c_str(), _body.size());
             close(inputPipe[1]);
 
@@ -229,13 +202,10 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
             int status;
             int elapsedTime = 0;
 
-            // Timeout de 5 secondes pour le CGI
             while (elapsedTime < 5)
             {
-                // Vérifier si le processus CGI a terminé (non bloquant)
                 pid_t result = waitpid(pid, &status, WNOHANG);
-                
-                if (result == pid)  // CGI terminé
+                if (result == pid)
                 {
                     while ((bytesRead = read(outputPipe[0], buffer, sizeof(buffer) - 1)) > 0)
                     {
@@ -246,39 +216,29 @@ std::string HttpRequest::executeCGI(const std::string& scriptPath, ServerConfig&
                     
                     return constructCGIResponse(output);
                 }
-                else if (result == 0)  // CGI en cours
+                else if (result == 0)
                 {
-                    usleep(500000);  // Attendre 500 ms (0.5 seconde)
+                    usleep(500000);
                     elapsedTime++;
                 }
-                else  // Erreur avec waitpid
-                {
+                else
                     throw std::runtime_error("Erreur lors de l'attente du processus CGI");
-                }
             }
-
-            // Timeout atteint -> tuer le processus CGI
             kill(pid, SIGKILL);
-            waitpid(pid, NULL, 0);  // Éviter les processus zombies
+            waitpid(pid, NULL, 0);
             close(outputPipe[0]);
-
-            return findErrorPage(config,504);  // 504 Gateway Timeout
+            return findErrorPage(config,504);
         }
         else
-        {
             throw std::runtime_error("Fork failed");
-        }
     }
     catch (const std::exception& e)
     {
         std::cerr << "Erreur CGI : " << e.what() << std::endl;
         return generateDefaultErrorPage(500);
     }
-
     return generateDefaultErrorPage(500);
 }
-
-
 
 std::string HttpRequest::handlePost(ServerConfig& config)
 {
