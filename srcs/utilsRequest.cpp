@@ -233,7 +233,7 @@ int HttpRequest::extractStatusCode(const std::string& response)
 std::string HttpRequest::generateDefaultErrorPage(int errorCode)
 {
     std::ostringstream response;
-    response << "<html><body><h1>Error " << errorCode << "</h1><p>Page not found.</p></body></html>";
+    response << "<html><body><h1>Error " << errorCode << "</h1></body></html>";
 
     std::ostringstream httpResponse;
     httpResponse << "HTTP/1.1 " << errorCode << " Error\r\n";

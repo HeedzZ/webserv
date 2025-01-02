@@ -95,10 +95,7 @@ std::string HttpRequest::handleGet(ServerConfig& config)
     if (!isFileAccessible(fullPath))
         return findErrorPage(config, 404);
     if (fullPath.find(".py") != std::string::npos && fullPath.find("/var/www/upload/") == std::string::npos)
-    {
-        std::cout << fullPath << std::cout;
         return executeCGI(fullPath, config);
-    }
     std::string fileContent = readFile(fullPath);
     if (fileContent.empty() && S_ISREG(fileStat.st_mode))
     {
@@ -333,7 +330,11 @@ std::string HttpRequest::handleDelete(ServerConfig& config)
         return findErrorPage(config, 405);
     if (unlink(resourcePath.c_str()) != 0)
         return findErrorPage(config, 500);
-    return findErrorPage(config, 204);
+    std::string response = "HTTP/1.1 204 Created\r\n";
+        response += "Content-Length: 0\r\n";
+        response += "Content-Type: text/plain\r\n";
+        response += "\r\n";
+        return response;
 }
 
 std::string HttpRequest::findErrorPage(ServerConfig& config, int errorCode)

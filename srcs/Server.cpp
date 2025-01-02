@@ -169,7 +169,7 @@ void Server::run()
         {
             if (!running)
                 break;
-            logMessage("ERROR", "Poll failed with error: " + std::string(strerror(errno)));
+            logMessage("ERROR", "Poll failed.");
             continue;
         }
 

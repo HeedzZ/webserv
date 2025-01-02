@@ -10,6 +10,8 @@ Server::Server(const std::string configFile) : running(false)
         if (!parseConfigFile(configFile))
             throw std::runtime_error("Failed to parse configuration file: " + configFile);
         validateServerConfigurations();
+        if (_configs.empty())
+            throw std::runtime_error("Failed to parse configuration file: 0 valid config");
         initSockets();
     }
     catch (const std::exception& e)
@@ -63,11 +65,15 @@ void Server::validateServerConfigurations()
         const std::vector<int>& ports1 = _configs[i].getPorts();
         const std::string& serverName1 = _configs[i].getServerName();
 
-        for (size_t j = i + 1; j < _configs.size(); ++j)
+        bool shouldEraseI = false;  // Déclaration ici (en dehors de la boucle j)
+
+        for (size_t j = i + 1; j < _configs.size();)
         {
             const std::string& host2 = _configs[j].getHost();
             const std::vector<int>& ports2 = _configs[j].getPorts();
             const std::string& serverName2 = _configs[j].getServerName();
+
+            bool shouldEraseJ = false;
 
             for (size_t p1 = 0; p1 < ports1.size(); ++p1)
             {
@@ -77,28 +83,38 @@ void Server::validateServerConfigurations()
                     {
                         if (serverName1.empty() && serverName2.empty())
                         {
-                            std::cout <<
-                                "Multiple servers on the same host (" <<
-                                host1 << ") and port (" << intToString(ports1[p1]) <<
-                                ") without server_name." << std::endl;
-                            _configs.erase(_configs.begin() + j);
-                            _configs.erase(_configs.begin() + i);
+                            std::cout << "Multiple servers on the same host ("
+                                      << host1 << ") and port (" << intToString(ports1[p1])
+                                      << ") without server_name." << std::endl;
+                            shouldEraseI = true;
+                            shouldEraseJ = true;
                         }
-                        if (!serverName1.empty() && !serverName2.empty() && serverName1 == serverName2)
+                        else if (!serverName1.empty() && !serverName2.empty() && serverName1 == serverName2)
                         {
-                            std::cout <<
-                                "Duplicate server_name (" << serverName1 <<
-                                ") on the same host (" << host1 << ") and port (" << intToString(ports1[p1]) << ")." << std::endl;
-                            _configs.erase(_configs.begin() + j);
-                            _configs.erase(_configs.begin() + i);
-
+                            std::cout << "Duplicate server_name (" << serverName1
+                                      << ") on the same host (" << host1
+                                      << ") and port (" << intToString(ports1[p1]) << ")." << std::endl;
+                            shouldEraseJ = true;
                         }
                     }
                 }
             }
+            if (shouldEraseJ)
+            {
+                _configs.erase(_configs.begin() + j);
+                continue;  // Ne pas incrémenter j, car l'élément suivant prend sa place
+            }
+            ++j;  // Incrément si pas de suppression
+        }
+        if (shouldEraseI)
+        {
+            _configs.erase(_configs.begin() + i);
+            --i;  // Revenir en arrière car l'élément i a été supprimé
         }
     }
 }
+
+
 
 
 bool Server::parseFileInBlock(std::string configFile)
