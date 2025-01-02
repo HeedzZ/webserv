@@ -39,16 +39,6 @@ const std::string& ServerLocation::getIndex() const
     return _index;
 }
 
-void ServerLocation::addCgiExtension(const std::string& ext, const std::string& prog)
-{
-    cgi_extensions[ext] = prog;
-}
-
-const std::map<std::string, std::string>& ServerLocation::getCgiExtensions() const
-{
-    return cgi_extensions;
-}
-
 void ServerLocation::disableAllMethods()
 {
     _getAllowed = false;
@@ -111,11 +101,7 @@ void ServerLocation::display() const
 {
     std::cout << "----------location----------\n";
     std::cout << "Location Path: " << _path << std::endl;
-    std::cout << "CGI Extensions:\n";
     
-    for (std::map<std::string, std::string>::const_iterator it = cgi_extensions.begin(); it != cgi_extensions.end(); ++it)
-        std::cout << "  Extension: " << it->first << " -> Program: " << it->second << std::endl;
-
     std::cout << "root : " << _root << std::endl;
 
     std::cout << "index : " << _index << std::endl;
