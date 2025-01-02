@@ -68,10 +68,10 @@ const std::vector<ServerLocation>& ServerConfig::getLocations() const
 
 void ServerConfig::setHost(const std::string& host)
 {
-    /*if (!isValidIP(host)) {
+    if (!isValidIP(host)) {
         std::cerr << "Invalid IP address format: " << host << std::endl;
         throw std::invalid_argument("Invalid IP address format");
-    }*/
+    }
     _host = host;
 }
 
@@ -88,4 +88,37 @@ size_t ServerConfig::getClientMaxBodySize() const
 void ServerConfig::setClientMaxBodySize(size_t size)
 {
     _clientMaxBodySize = size;
+}
+
+bool ServerConfig::isValidIP(const std::string& ip) const
+{
+    int segments = 0;  
+    int value = 0;     
+    int charCount = 0;
+
+    for (size_t i = 0; i < ip.size(); ++i)
+    {
+        char c = ip[i];
+
+        if (c == '.')
+        {
+            if (charCount == 0 || value > 255)
+                return false;
+            segments++;
+            value = 0;
+            charCount = 0;
+        }
+        else if (c >= '0' && c <= '9')
+        {
+            value = value * 10 + (c - '0');
+            charCount++;
+            if (charCount > 3 || value > 255)
+                return false;
+        }
+        else
+            return false;
+    }
+    if (segments != 3 || charCount == 0 || value > 255)
+        return false;
+    return true;
 }

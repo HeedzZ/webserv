@@ -89,7 +89,7 @@ void ServerConfig::parseServerBlock(const std::string& serverBlock)
             if (value.empty())
                 throw std::runtime_error("Error: Missing value for 'host'");
 
-            _host = value;
+            setHost(value);
         }
         else if (line.find("client_max_body_size") == 0)
         {

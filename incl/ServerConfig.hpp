@@ -69,6 +69,8 @@ public:
     const std::vector<std::string>& getServerBlocks() const;
     std::string trim(const std::string& str);
 
+    bool isValidIP(const std::string& ip) const;
+
 	
 };
 
