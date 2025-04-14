@@ -20,12 +20,12 @@ Writing a full server architecture with configurable virtual hosts, error pages,
   
    Fully customizable via a config file (.conf style)
   
-   One poll() (or equivalent) for all I/O
+   One poll() all I/O
   
    Works in a real browser
   
    Built-in error pages
   
-   Execute CGI scripts (like PHP or Python)
+   Execute CGI scripts (Python)
   
    Handle file uploads
